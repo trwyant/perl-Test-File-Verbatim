@@ -19,7 +19,8 @@ sub new {
 sub BAIL_OUT {
     my ( $self, @arg ) = @_;
     push @{ $self->{log} }, [ BAIL_OUT => @arg ];
-    Carp::croak( 'BAIL_OUT' );
+    local $" = '';
+    Carp::croak( "BAIL_OUT @arg" );
 }
 
 

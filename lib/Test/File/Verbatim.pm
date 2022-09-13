@@ -299,53 +299,79 @@ sub __get_http_tiny {
 }
 
 sub _get_handle {
-    my ( $self, $module ) = @_;
-    my $context = $self->{context} ||= {
+    my ( $self, $url ) = @_;
+    $self->{context} ||= {
 	trim	=> 0,
     };
 
-    my $mod_name = ref $module || $module;
+    my $mod_name = ref $url || $url;
 
-    my ( $mode, $path );
-    if ( ref $module ) {
-	$path = $module;
-    } elsif ( $module =~ m|/| ) {
-	if ( $module =~ m| \A https?:// |smx ) {
-	    my $ua = __get_http_tiny();
-	    my $resp = $ua->get( $module );
-	    $resp->{success}
-		or $self->_bail_out( "$resp->{status} $resp->{reason} $resp->{content}" );
-	    local $_ = $resp->{headers}{'content-type'};
-	    defined
-		or $self->_bail_out( "$module did not return content-type" );
-	    m| \A text / |smx
-		or $self->_bail_out( "Content-type $_ is not text" );
-	    if ( m/ \b charset= ( \S+ ) /smx ) {
-		$mode = "<:encoding($1)";
-	    } else {
-		$mode = '<';
-	    }
-	    $path = \$resp->{content};
-	} else {
-	    $path = $module;
-	}
-    } else {
-	my $data = Module::Load::Conditional::check_install( module => $module )
-	    or $self->_bail_out( "Module $module not installed" );
-	# TODO can we get it from the web if it is not installed?
-	$path = $data->{file};
-    }
+    my ( $scheme ) = $mod_name =~ m/ \A ( file | https? | module ) : /smx;
+    $scheme //= ( ref( $url ) || $url =~ m|/| || -e $url ) ? 'file' : 'module';
 
-    $mode //= $self->_file_mode( $mod_name );
+    my $code = $self->can( "_get_handle_scheme_$scheme" )
+	or $self->_bail_out( "URL scheme '$scheme:' unsupported" );
+    return $code->( $self, $url );
+}
+
+sub _get_handle_open {
+    my ( $self, $path, $mode ) = @_;
+
+    my $name = ref $path || $path;
+
+    $mode //= $self->_file_mode( $name );
+
     open my $fh, $mode, $path
 	or do {
-	$self->_bail_out( "Unable to open $mod_name: $!" );
+	$self->_bail_out( "Unable to open $name: $!" );
     };
 
-    $context->{file_name} //= $mod_name;
+    my $context = $self->{context};
+    $context->{file_name} //= $name;
     $context->{file_handle} //= $fh;
 
     return $fh;
+}
+
+sub _get_handle_scheme_file {
+    my ( $self, $url ) = @_;
+    $url =~ s| \A file: (?: // )? ||smx;
+    return $self->_get_handle_open( $url );
+}
+
+sub _get_handle_scheme_http {
+    my ( $self, $url ) = @_;
+
+    my $ua = __get_http_tiny();
+    my $resp = $ua->get( $url );
+    $resp->{success}
+	or $self->_bail_out(
+	"$resp->{status} $resp->{reason} $resp->{content}" );
+    local $_ = $resp->{headers}{'content-type'};
+    defined
+	or $self->_bail_out( "$url did not return content-type" );
+    m| \A text / |smx
+	or $self->_bail_out( "Content-type $_ is not text" );
+    my $mode;
+    if ( m/ \b charset= ( \S+ ) /smx ) {
+	$mode = "<:encoding($1)";
+    } else {
+	$mode = '<';
+    }
+    $self->{context}{file_name} //= $url;
+    return $self->_get_handle_open( \$resp->{content}, $mode );
+}
+
+*_get_handle_scheme_https = \&_get_handle_scheme_http;
+
+sub _get_handle_scheme_module {
+    my ( $self, $url ) = @_;
+    $url =~ s| \A module: ||smx;
+    my $data = Module::Load::Conditional::check_install( module => $url )
+	or $self->_bail_out( "Module $url not installed" );
+    # TODO can we get it from the web if it is not installed?
+    $self->{context}{file_name} //= $url;
+    return $self->_get_handle_open( $data->{file} );
 }
 
 # This gets used so that we can hot-patch in a mock class for testing
@@ -488,19 +514,39 @@ source changes.
 This module supports the following public subroutines. All public
 subroutines are exportable, and in fact all are exported by default.
 
-In general, files can be specified as follows:
+In general, data are specified as URLs. The following schemes are
+recognized, some of which are distinctly non-standard:
 
 =over
 
-=item * An http:// or https:// URI;
+=item file:
 
-=item * A POSIX file name, containing at least one solidus (C<'/'>);
+This is handled by the stripping the leading C<'file:'> (and C<'//'> if
+present), and then using the normal Perl file I/O mechanism.
 
-=item * The name of an installed Perl module;
+=item http:
 
-=item * A reference to a scalar containing the text in the file.
+This is handled by L<HTTP::Tiny|HTTP:Tiny>.
+
+=item https:
+
+This is handled by L<HTTP::Tiny|HTTP:Tiny>, provided the requisite
+modules are installed.
+
+=item module:
+
+This is handled by stripping the leading C<module:> and handing the rest
+to
+L<Module::Load::Conditional::check_install()|Module::Load::Conditional>.
+If it can find the module, the normal file I/O mechanism.
 
 =back
+
+If a recognized scheme can not be found, scheme C<file:> is used if the
+string contains a solidus (C<'/'>) or refers to an existing file;
+otherwise scheme C<module:> is used.
+
+As a special case, C<SCALAR> references are handled as files.
 
 =begin comment
 
