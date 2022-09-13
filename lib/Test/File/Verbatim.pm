@@ -185,7 +185,11 @@ sub file_contains_ok {
 	    $self->__slurp_module( $path ),
 	    $self->__slurp_module( $source ),
 	) >= 0,
-	"$path contains $source" );
+	sprintf( '%s contains %s',
+	    ref $path || $path,
+	    ref $source || $source,
+	),
+    );
 }
 
 sub _file_mode {
@@ -269,8 +273,11 @@ sub files_are_identical_ok {
     return $TEST->is_eq(
 	$self->__slurp_module( $path ),
 	$self->__slurp_module( $source ),
-	"$path is identical to $source",
-    )
+	sprintf( '%s is identical to %s',
+	    ref $path || $path,
+	    ref $source || $source,
+	),
+    );
 }
 
 sub _bail_out {
@@ -291,6 +298,27 @@ sub _bail_out {
     return;	# Can't get here, but Perl::Critic does not know this.
 }
 
+sub _bail_out_not_installed {
+    my ( $self, $module ) = @_;
+    return $self->_bail_out( "Module $module not installed" );
+}
+
+sub _can_load {
+    my ( undef, $module ) = @_;	# Invocant unused
+    local $@ = undef;
+    return eval {
+	Module::Load::Conditional::can_load( modules => { $module => 0 } );
+	1;
+    };
+}
+
+sub _check_install {
+    my ( undef, $module ) = @_;	# Invocant unused
+    my $data = Module::Load::Conditional::check_install( module => $module )
+	or return;
+    return $data->{file};
+}
+
 # This gets used so that we can hot-patch in a mock class for testing
 # purposes.
 sub __get_http_tiny {
@@ -304,10 +332,21 @@ sub _get_handle {
 	trim	=> 0,
     };
 
-    my $mod_name = ref $url || $url;
+    my $scheme;
 
-    my ( $scheme ) = $mod_name =~ m/ \A ( file | https? | module ) : /smx;
-    $scheme //= ( ref( $url ) || $url =~ m|/| || -e $url ) ? 'file' : 'module';
+    foreach my $code (
+	sub { ref $_[0] ? 'file' : undef },
+	sub { $_[0] =~ m/ \A ( file | https? | license | module ) : /smx ?
+	    $1 : undef },
+	sub { -e $_[0] ? 'file' : undef },
+	sub { $self->_check_install( $_[0] ) ? 'module' : undef },
+	sub { $self->_check_install( "Software::License::$_[0]" ) ?
+	    'license' : undef },
+	sub { 'file' },
+    ) {
+	defined( $scheme = $code->( $url ) )
+	    and last;
+    }
 
     my $code = $self->can( "_get_handle_scheme_$scheme" )
 	or $self->_bail_out( "URL scheme '$scheme:' unsupported" );
@@ -335,7 +374,8 @@ sub _get_handle_open {
 
 sub _get_handle_scheme_file {
     my ( $self, $url ) = @_;
-    $url =~ s| \A file: (?: // )? ||smx;
+    ref $url
+	or $url =~ s| \A file: (?: // )? ||smx;
     return $self->_get_handle_open( $url );
 }
 
@@ -364,14 +404,30 @@ sub _get_handle_scheme_http {
 
 *_get_handle_scheme_https = \&_get_handle_scheme_http;
 
+sub _get_handle_scheme_license {
+    my ( $self, $url ) = @_;
+    my ( $module, $query ) = split /\?/, $url, 2;
+    $self->{context}{file_name} //= $url;
+    $module =~ s| \A license: |Software::License::|smx;
+    $self->_can_load( $module )
+	or $self->_bail_out_not_installed( $module );
+    $query //= '';
+    my %arg = map { split /=/, $_, 2 } split /[;&]/, $query;
+    my $method = delete( $arg{method} ) // 'license';
+    $arg{holder} //= 'Anonymous';
+    my $license = $module->new( \%arg );
+    my $text = $license->$method();
+    return $self->_get_handle_open( \$text );
+}
+
 sub _get_handle_scheme_module {
     my ( $self, $url ) = @_;
     $url =~ s| \A module: ||smx;
-    my $data = Module::Load::Conditional::check_install( module => $url )
-	or $self->_bail_out( "Module $url not installed" );
+    my $path = $self->_check_install( $url )
+	or $self->_bail_out_not_installed( $url );
     # TODO can we get it from the web if it is not installed?
     $self->{context}{file_name} //= $url;
-    return $self->_get_handle_open( $data->{file} );
+    return $self->_get_handle_open( $path );
 }
 
 # This gets used so that we can hot-patch in a mock class for testing
@@ -533,20 +589,52 @@ This is handled by L<HTTP::Tiny|HTTP:Tiny>.
 This is handled by L<HTTP::Tiny|HTTP:Tiny>, provided the requisite
 modules are installed.
 
+=item license:
+
+This is handled by stripping replacing the leading C<license:> with
+C<Software::License::> and handing the rest to
+L<Module::Load::Conditional::can_load()|Module::Load::Conditional>. If
+this fails we bail out. If it succeeds a license object is instantiated
+and queried, and a reference to the result is handled by the normal file
+I/O mechanism.
+
+The query mechanism for URLs is used to specify arguments to the
+operation. Required argument C<'holder'> defaults to C<'Anonymous'>.
+
+In addition to the arguments documented in
+L<Software::License|Software::License>, argument C<'method'> specifies
+the C<Software::License> method used to retrieve the license. This
+defaults to C<'license'>.
+
+B<Caveat:> the argument parsing is just a regular expression, because I
+wanted to keep non-core dependencies to a minimum. If this turns out to
+be a problem, I might look into using something like L<URI|URI> if it is
+available.
+
 =item module:
 
 This is handled by stripping the leading C<module:> and handing the rest
 to
 L<Module::Load::Conditional::check_install()|Module::Load::Conditional>.
-If it can find the module, the normal file I/O mechanism.
+If it can find the module, the normal file I/O mechanism is used.
 
 =back
 
-If a recognized scheme can not be found, scheme C<file:> is used if the
-string contains a solidus (C<'/'>) or refers to an existing file;
-otherwise scheme C<module:> is used.
+If a recognized scheme can not be found, the default scheme is:
 
-As a special case, C<SCALAR> references are handled as files.
+=over
+
+=item file: if the file exists
+
+=item module: if the module is installed
+
+=item license: if the specified Software::License:: module is installed
+
+=item otherwise file:
+
+=back
+
+As a special case, C<SCALAR> references are always handled as files.
 
 =begin comment
 

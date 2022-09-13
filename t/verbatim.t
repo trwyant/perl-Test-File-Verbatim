@@ -19,6 +19,10 @@ my $ENOENT = do {
     "$!";
 };
 
+my $LICENSE_NONE = <<'EOD';
+All rights reserved.
+EOD
+
 note <<'EOD';
 
 Test using mock object, to ensure right steps are triggered
@@ -107,6 +111,17 @@ EOD
 	[
 	    [ is_eq => $text_01, $text_01, 't/data/text/test_01.txt is identical to t/data/text/test_01.txt', [ 1 ] ]
 	], 'Identical files: trace'
+	    or diag 'Got ', explain $TEST->__get_log();
+
+
+    $TEST->__clear();
+
+    files_are_identical_ok \$LICENSE_NONE, 'license:None';
+
+    is_deeply $TEST->__get_log(),
+	[
+	    [ is_eq => $LICENSE_NONE, $LICENSE_NONE, 'SCALAR is identical to license:None', [ 1 ] ]
+	], 'license:None: trace'
 	    or diag 'Got ', explain $TEST->__get_log();
 
 
@@ -233,7 +248,7 @@ Test with encoding utf-8
 
 EOD
 
-configure_file_verbatim \<<EOD;
+configure_file_verbatim \<<'EOD';
 encoding utf-8
 EOD
 
