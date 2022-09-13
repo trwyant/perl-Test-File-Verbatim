@@ -13,7 +13,7 @@ use utf8;
 
 =cut
 
-# use Carp; # Don't use this, use _bail_out() instead.
+# use Carp; # Don't use this, use $self->_bail_out() instead.
 use Exporter qw{ import };
 use File::Find ();
 use HTTP::Tiny;
@@ -24,8 +24,7 @@ use Text::ParseWords ();
 
 our $VERSION = '0.000_001';
 
-use constant CALLER_HINT_HASH	=> 10;
-use constant REF_HASH		=> ref {};
+use constant REF_ARRAY		=> ref [];
 use constant VERBATIM		=> '## VERBATIM ';
 use constant VERBATIM_END	=> VERBATIM . 'END';
 
@@ -102,11 +101,15 @@ sub _all_verbatim_ok_expand_topic {
 
 sub configure_file_verbatim {
     my ( $self, $path ) = _get_args( @_ );
-    my $fh = $self->_get_handle( $path );
-    while ( <$fh> ) {
-	$self->_configure_line( $_ );
+    if ( REF_ARRAY eq ref $path ) {
+	$self->_configure_parsed( @{ $path } );
+    } else {
+	my $fh = $self->_get_handle( $path );
+	while ( <$fh> ) {
+	    $self->_configure_line( $_ );
+	}
+	close $fh;
     }
-    close $fh;
     return;
 }
 
@@ -117,8 +120,14 @@ sub _configure_line {
 	and index $line, '#'
 	or return;
     $line =~ s/ \s+ \z //smx;
-    my @argv = Text::ParseWords::shellwords( $line )
-	or next;
+    $self->_configure_parsed( Text::ParseWords::shellwords( $line ) );
+    return;
+}
+
+sub _configure_parsed {
+    my ( $self, @argv ) = @_;
+    @argv
+	or return;
     my $verb = shift @argv;
     my $code = $self->can( "_configure_verb_\L$verb" )
 	or $self->_bail_out( "Configuration item $verb unknown" );
@@ -219,6 +228,7 @@ sub file_verbatim_ok {
 	defined $sub_cmd
 	    or $self->_bail_out( VERBATIM, 'sub-command missing' );
 
+	$context->{line} = $.;
 	my $code = $self->can( "_verbatim_$sub_cmd" )
 	    or $self->_bail_out( VERBATIM, "$sub_cmd not recognized" );
 
@@ -345,17 +355,11 @@ sub __get_test_builder {
     return $TEST;
 }
 
-{
-    my %ignore;
-    BEGIN {
-	%ignore = map { $_ => 1 } __PACKAGE__, qw{ DB File::Find };
-    }
-
-    sub _nest_depth {
-	my $nest = 0;
-	$nest++ while $ignore{ caller( $nest ) || '' };
-	return $nest;
-    }
+sub _nest_depth {
+    my $nest = 0;
+    state $ignore = { map { $_ => 1 } __PACKAGE__, qw{ DB File::Find } };
+    $nest++ while $ignore->{ caller( $nest ) || '' };
+    return $nest;
 }
 
 sub _read_verbatim_section {
@@ -416,7 +420,6 @@ sub _verbatim_BEGIN {
     local $Test::Builder::Level = _nest_depth();
 
     $context->{count}++;
-    $context->{line} = $.;
     defined( my $content = $self->_read_verbatim_section() )
 	or $self->_bail_out( VERBATIM, 'BEGIN not terminated' );
 
@@ -428,8 +431,22 @@ sub _verbatim_BEGIN {
 
 sub _verbatim_CONFIGURE {
     my ( $self, $arg ) = @_;
-    $DB::single = 1;
-    $self->_configure_line( $arg );
+    $arg //= '';
+    if ( $arg =~ m/ \S /smx ) {
+	$self->_configure_line( $arg );
+    } else {
+	my $context = $self->{context};
+	my $fh = $context->{file_handle};
+	my $configure_line = $.;
+	while ( <$fh> ) {
+	    index $_, VERBATIM_END
+		or return 1;
+	    $context->{line} = $.;
+	    $self->_configure_line( $_ );
+	}
+	$self->{context}{line} = $configure_line;
+	$self->_bail_out( VERBATIM, 'CONFIGURE not terminated' );
+    }
     return 1;
 }
 
@@ -510,7 +527,15 @@ if any test fails.
 
 =head2 configure_file_verbatim
 
-This subroutine reads and executes the specified configuration file.
+ configure_file_verbatim 'xt/author/file_test_verbatim_config';
+ configure_file_verbatim \'encoding utf-8';
+ configure_file_verbatim [ encoding => 'utf-8' ];
+
+This subroutine configures the test. It takes a single argument, which
+can be a file name, an C<http:> or C<https:> URL, a reference to a
+scalar specifying the configuration, or a reference to an array
+containing a single configuration item name and its arguments.
+
 See L<CONFIGURATION|/CONFIGURATION>, below for details.
 
 =head2 files_are_identical_ok
@@ -560,9 +585,13 @@ verbatim block is found in the source, and fails if not.
 
 This annotation ends a verbatim block.
 
-=item ## VERBATIM CONFIGURE item ...
+=item ## VERBATIM CONFIGURE
 
-This annotation specifies a configuration item.
+Without any arguments, this specifies a block of configuration commands,
+terminated by C<## VERBATIM END>.
+
+With arguments, this specifies a single configuration item.
+
 See L<CONFIGURATION|/CONFIGURATION>, below for details.
 
 =item ## VERBATIM EXPECT number
@@ -588,8 +617,7 @@ if any test fails.
 =head1 CONFIGURATION
 
 Configuration can be done either by calling
-L<configure_file_verbatim()|/configure_file_verbatim> and passing it a
-configuration file (either name, URL, or SCALAR reference), or by
+L<configure_file_verbatim()|/configure_file_verbatim> (q.v.) or by
 specifying a C<## VERBATIM CONFIGURE> annotation.
 
 Either way the specification is parsed by
@@ -606,9 +634,9 @@ The following configuration items are supported:
 This specifies file encodings. It takes either one or two arguments. The
 first is the encoding name (e.g. C<'utf-8'>.
 
-If a second argument is specified it
-is the name of the file to which the encoding applies. File names are
-matched by case-sensitive string comparison, so (for example)
+If a second argument is specified it is the name of the file to which
+the encoding applies. File names are matched by case-sensitive string
+comparison, so (for example)
 
  encoding utf-8 foo/bar
 
