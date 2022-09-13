@@ -1,0 +1,15 @@
+## VERBATIM BEGIN t/data/text/limerick_bright.txt
+There was a young lady named Bright
+Who could travel much faster than light.
+    She set out one day
+    In a relative way
+And returned the previous night.
+## VERBATIM END
+
+## VERBATIM BEGIN t/data/text/limerick_moebius.txt
+A mathematician confided
+That a Möbius strip is one-sided.
+    You get quite a laugh
+    When you cut it in half,
+For it stays in one piece when divided.
+## VERBATIM END

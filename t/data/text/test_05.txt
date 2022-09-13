@@ -1,0 +1,7 @@
+## VERBATIM BEGIN https://limmerick.org/boat.html
+There was an old man in a boat,
+Who said, "I'm afloat! I'm afloat!"
+    When they said "No, you ain't,"
+    He was ready to faint,
+That unhappy old man in a boat.
+## VERBATIM END

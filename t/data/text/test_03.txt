@@ -1,0 +1,17 @@
+## VERBATIM BEGIN Limerick
+There was an old man from Nantucket
+Who kept all his cash in a bucket.
+    But his daughter named Nan
+    Ran away with a man,
+And as for the bucket, Nan tuck it.
+## VERBATIM END
+
+## VERBATIM CONFIGURE TRIM ON
+
+## VERBATIM BEGIN t/data/text/limerick_moebius.txt
+    A mathematician confided
+    That a Möbius strip is one-sided.
+	You get quite a laugh
+	When you cut it in half,
+    For it stays in one piece when divided.
+## VERBATIM END

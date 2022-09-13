@@ -1,0 +1,680 @@
+package Test::File::Verbatim;
+
+use 5.010;
+
+use strict;
+use warnings;
+
+use utf8;
+
+=pod
+
+=encoding utf-8
+
+=cut
+
+# use Carp; # Don't use this, use _bail_out() instead.
+use Exporter qw{ import };
+use File::Find ();
+use HTTP::Tiny;
+use Module::Load::Conditional ();
+use Scalar::Util ();
+use Test::Builder;
+use Text::ParseWords ();
+
+our $VERSION = '0.000_001';
+
+use constant CALLER_HINT_HASH	=> 10;
+use constant REF_HASH		=> ref {};
+use constant VERBATIM		=> '## VERBATIM ';
+use constant VERBATIM_END	=> VERBATIM . 'END';
+
+our @EXPORT_OK = qw{
+    all_verbatim_ok
+    configure_file_verbatim
+    file_contains_ok
+    files_are_identical_ok
+    file_verbatim_ok
+};
+
+our @EXPORT = @EXPORT_OK;	## no critic (ProhibitAutomaticExportation)
+
+our %EXPORT_TAGS = (
+    all		=> \@EXPORT_OK,
+    default	=> \@EXPORT,
+);
+
+{
+    my $test;
+
+    sub new {
+	my ( $class ) = @_;
+	return ( $test = bless {
+		default_encoding	=> '',
+	    }, $class );
+    }
+
+    sub _get_args {
+	my @args = @_;
+	unless ( Scalar::Util::blessed( $args[0] ) ) {
+	    $test
+		or __PACKAGE__->new();
+	    unshift @args, $test;
+	}
+	return @args;
+    }
+}
+
+sub all_verbatim_ok {
+    my ( $self, @arg ) = _get_args( @_ );
+    @arg
+	or @arg = grep { -d } qw{ blib t eg };
+    my $rslt = 1;
+    foreach my $path ( map { $self->_all_verbatim_ok_expand_topic() } @arg ) {
+	# NOTE that the following has to be done in two steps. If I just
+	# tried $rslt &&= $self->file_verbatim_ok( $path ) no tests
+	# would be run after the first failure, because it would
+	# shortcut.
+	my $ok = $self->file_verbatim_ok( $path );
+	$rslt &&= $ok;
+    }
+    return $rslt;
+}
+
+sub _all_verbatim_ok_expand_topic {
+    ref
+	and return $_;
+    if ( -d ) {
+	my @rslt;
+	File::Find::find(
+	    sub {
+		-d
+		    or -z _
+		    or -B _
+		    or push @rslt, $File::Find::name;
+	    },
+	    $_,
+	);
+	return @rslt;
+    }
+    return $_;
+}
+
+sub configure_file_verbatim {
+    my ( $self, $path ) = _get_args( @_ );
+    my $fh = $self->_get_handle( $path );
+    while ( <$fh> ) {
+	$self->_configure_line( $_ );
+    }
+    close $fh;
+    return;
+}
+
+sub _configure_line {
+    my ( $self, $line ) = @_;
+    s/ \A \s+ //smx;
+    $line ne ''
+	and index $line, '#'
+	or return;
+    $line =~ s/ \s+ \z //smx;
+    my @argv = Text::ParseWords::shellwords( $line )
+	or next;
+    my $verb = shift @argv;
+    my $code = $self->can( "_configure_verb_\L$verb" )
+	or $self->_bail_out( "Configuration item $verb unknown" );
+    $code->( $self, @argv );
+    return;
+}
+
+sub _configure_verb_encoding {
+    my ( $self, $encoding, $path ) = @_;
+    $encoding //= '';
+    if ( defined $path ) {
+	if ( $self->{file_encoding}{$path} ne $encoding ) {
+	    delete $self->{cache}{$path};
+	    $self->{file_encoding}{$path} = $encoding;
+	}
+    } else {
+	if ( $self->{default_encoding} ne $encoding ) {
+	    delete $self->{cache};
+	    $self->{default_encoding} = $encoding;
+	}
+    }
+    return;
+}
+
+sub _configure_verb_trim {
+    my ( $self, $value ) = @_;
+    $self->{context}{trim} = _configure_interpret_boolean( $value );
+    return;
+}
+
+sub _configure_interpret_boolean {
+    my ( $value ) = @_;
+    return {
+	false	=> 0,
+	no	=> 0,
+	off	=> 0,
+    }->{"\L$value"} // !! $value;
+}
+
+sub file_contains_ok {
+    my ( $self, $path, $source ) = _get_args( @_ );
+
+    $self->{context} = {
+	trim	=> 0,
+    };
+
+    # Because this gets us a pre-built object I use $Test::Builder::Level
+    # (localized) to get tests reported relative to the correct file and
+    # line, rather than setting the 'level' attribute.
+    my $TEST = __get_test_builder();
+    local $Test::Builder::Level = _nest_depth();
+
+    return $TEST->ok(
+	index(
+	    $self->__slurp_module( $path ),
+	    $self->__slurp_module( $source ),
+	) >= 0,
+	"$path contains $source" );
+}
+
+sub _file_mode {
+    my ( $self, $path ) = @_;
+    my $encoding;
+    defined $path
+	and $encoding = $self->{file_encoding}{$path};
+    $encoding //= $self->{default_encoding};
+    return $encoding eq '' ? '<' : "<:encoding($encoding)";
+}
+
+sub file_verbatim_ok {
+    my ( $self, $path ) = _get_args( @_ );
+
+    my $rslt = 1;
+
+    # Because this gets us a pre-built object I use $Test::Builder::Level
+    # (localized) to get tests reported relative to the correct file and
+    # line, rather than setting the 'level' attribute.
+    my $TEST = __get_test_builder();
+    local $Test::Builder::Level = _nest_depth();
+
+    my $context = $self->{context} = {
+	trim	=> 0,
+    };
+
+    my $fh = $self->_get_handle( $path );
+
+    if ( -B $path && ! -z _ ) {
+	$TEST->skip( "$path is binary" );
+	return $rslt;
+    }
+
+    while ( <$fh> ) {
+	m/\A\#\# VERBATIM\b/
+	    or next;
+	$context->{line} = $.;
+	chomp;
+	my ( undef, undef, $sub_cmd, $arg ) = split qr< \s+ >smx, $_, 4;
+	defined $sub_cmd
+	    or $self->_bail_out( VERBATIM, 'sub-command missing' );
+
+	my $code = $self->can( "_verbatim_$sub_cmd" )
+	    or $self->_bail_out( VERBATIM, "$sub_cmd not recognized" );
+
+	# NOTE that the following has to be done in two steps. If I just
+	# tried $rslt &&= $self->file_verbatim_ok( $path ) no tests
+	# would be run after the first failure, because it would
+	# shortcut.
+	my $ok = $code->( $self, $arg );
+	$rslt &&= $ok;
+    }
+
+    if ( defined $context->{expect} ) {
+	my $ok = $TEST->cmp_ok(
+	    $context->{count}, '==', $context->{expect},
+	    "$context->{file_name} contains expected number of verbatim blocks",
+	);
+	$rslt &&= $ok;
+    } elsif ( ! $context->{count} ) {
+	$TEST->skip( "$context->{file_name} contains no verbatim blocks" );
+    }
+
+    return $rslt;
+}
+
+sub files_are_identical_ok {
+    my ( $self, $path, $source ) = _get_args( @_ );
+
+    $self->{context} = {
+	trim	=> 0,
+    };
+
+    # Because this gets us a pre-built object I use $Test::Builder::Level
+    # (localized) to get tests reported relative to the correct file and
+    # line, rather than setting the 'level' attribute.
+    my $TEST = __get_test_builder();
+    local $Test::Builder::Level = _nest_depth();
+
+    return $TEST->is_eq(
+	$self->__slurp_module( $path ),
+	$self->__slurp_module( $source ),
+	"$path is identical to $source",
+    )
+}
+
+sub _bail_out {
+    my ( $self, @reason ) = @_;
+    my $context = $self->{context};
+    exists $context->{file_name}
+	and exists $context->{line}
+	and push @reason, " at $context->{file_name} line $context->{line}";
+
+    # Because this gets us a pre-built object I use $Test::Builder::Level
+    # (localized) to get tests reported relative to the correct file and
+    # line, rather than setting the 'level' attribute.
+    my $TEST = __get_test_builder();
+    local $Test::Builder::Level = _nest_depth();
+
+    local $" = '';
+    $TEST->BAIL_OUT( "@reason" );
+    return;	# Can't get here, but Perl::Critic does not know this.
+}
+
+# This gets used so that we can hot-patch in a mock class for testing
+# purposes.
+sub __get_http_tiny {
+    state $UA = HTTP::Tiny->new();
+    return $UA;
+}
+
+sub _get_handle {
+    my ( $self, $module ) = @_;
+    my $context = $self->{context} ||= {
+	trim	=> 0,
+    };
+
+    my $mod_name = ref $module || $module;
+
+    my ( $mode, $path );
+    if ( ref $module ) {
+	$path = $module;
+    } elsif ( $module =~ m|/| ) {
+	if ( $module =~ m| \A https?:// |smx ) {
+	    my $ua = __get_http_tiny();
+	    my $resp = $ua->get( $module );
+	    $resp->{success}
+		or $self->_bail_out( "$resp->{status} $resp->{reason} $resp->{content}" );
+	    local $_ = $resp->{headers}{'content-type'};
+	    defined
+		or $self->_bail_out( "$module did not return content-type" );
+	    m| \A text / |smx
+		or $self->_bail_out( "Content-type $_ is not text" );
+	    if ( m/ \b charset= ( \S+ ) /smx ) {
+		$mode = "<:encoding($1)";
+	    } else {
+		$mode = '<';
+	    }
+	    $path = \$resp->{content};
+	} else {
+	    $path = $module;
+	}
+    } else {
+	my $data = Module::Load::Conditional::check_install( module => $module )
+	    or $self->_bail_out( "Module $module not installed" );
+	# TODO can we get it from the web if it is not installed?
+	$path = $data->{file};
+    }
+
+    $mode //= $self->_file_mode( $mod_name );
+    open my $fh, $mode, $path
+	or do {
+	$self->_bail_out( "Unable to open $mod_name: $!" );
+    };
+
+    $context->{file_name} //= $mod_name;
+    $context->{file_handle} //= $fh;
+
+    return $fh;
+}
+
+# This gets used so that we can hot-patch in a mock class for testing
+# purposes.
+sub __get_test_builder {
+    state $TEST = Test::Builder->new();
+    return $TEST;
+}
+
+{
+    my %ignore;
+    BEGIN {
+	%ignore = map { $_ => 1 } __PACKAGE__, qw{ DB File::Find };
+    }
+
+    sub _nest_depth {
+	my $nest = 0;
+	$nest++ while $ignore{ caller( $nest ) || '' };
+	return $nest;
+    }
+}
+
+sub _read_verbatim_section {
+    my ( $self ) = @_;
+    my $context = $self->{context};
+    my $fh = $context->{file_handle};
+
+    my $content = '';
+
+    local $_ = undef;
+    while ( <$fh> ) {
+	index $_, VERBATIM_END
+	    or return $context->{trim} ? _trim_text( $content ) : $content;
+	$content .= $_;
+    }
+
+    return;
+}
+
+# This gets called as a convenience (and encapsulation violation) from
+# t/verbatim.t, and so needs the argument processing.
+sub __slurp_module {
+    my ( $self, $module ) = _get_args( @_ );
+
+    my $context = $self->{context} ||= {
+	trim	=> 0,
+    };
+
+    my $cache = $self->{cache}{$module} ||= [];
+    $cache->[0] ||= do {
+	my $fh = $self->_get_handle( $module );
+	local $/ = undef;
+	<$fh>;
+    };
+
+    if ( $context->{trim} ) {
+	$cache->[$context->{trim}] ||= _trim_text( $cache->[0] );
+    }
+
+    return $cache->[$context->{trim}];
+}
+
+sub _trim_text {
+    ( local $_ ) = @_;
+    s/ ^ \s+ //mxg;
+    s/ \s+ $ //mxg;
+    return $_;
+}
+
+sub _verbatim_BEGIN {
+    my ( $self, $module ) = @_;
+    my $context = $self->{context};
+
+    # Because this gets us a pre-built object I use $Test::Builder::Level
+    # (localized) to get tests reported relative to the correct file and
+    # line, rather than setting the 'level' attribute.
+    my $TEST = __get_test_builder();
+    local $Test::Builder::Level = _nest_depth();
+
+    $context->{count}++;
+    $context->{line} = $.;
+    defined( my $content = $self->_read_verbatim_section() )
+	or $self->_bail_out( VERBATIM, 'BEGIN not terminated' );
+
+    my $name = "$context->{file_name} line $context->{line} verbatim block found in $module";
+    my $rslt = index( $self->__slurp_module( $module ), $content ) >= 0;
+
+    return $TEST->ok( $rslt, $name );
+}
+
+sub _verbatim_CONFIGURE {
+    my ( $self, $arg ) = @_;
+    $DB::single = 1;
+    $self->_configure_line( $arg );
+    return 1;
+}
+
+sub _verbatim_EXPECT {
+    my ( $self, $arg ) = @_;
+    my $context = $self->{context};
+
+    ( $context->{expect} ) = split qr< \s+ >smx, $arg, 2;
+    return 1;
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+Test::File::Verbatim - Ensure that copied-and-pasted text tracks its source.
+
+=head1 SYNOPSIS
+
+ use Test::More 0.88; # for done_testing.
+ use Test::File::Verbatim;
+ 
+ all_verbatim_ok;
+
+ done_testing;
+
+=head1 DESCRIPTION
+
+Yes, copy-and-paste is technical debt that should be avoided.
+Unfortunately sometimes it is (or at least appears to be) a necessary
+evil. The purpose of this set of tests is to provide ways to mitigate
+(but not eliminate) the problem by providing tests that fail when the
+source changes.
+
+=head1 SUBROUTINES
+
+This module supports the following public subroutines. All public
+subroutines are exportable, and in fact all are exported by default.
+
+In general, files can be specified as follows:
+
+=over
+
+=item * An http:// or https:// URI;
+
+=item * A POSIX file name, containing at least one solidus (C<'/'>);
+
+=item * The name of an installed Perl module;
+
+=item * A reference to a scalar containing the text in the file.
+
+=back
+
+=begin comment
+
+=head2 new
+
+This B<UNSUPPORTED> static method instantiates a test object.
+
+This section of POD will be uncommented and filled out when the O-O
+interface becomes supported, if ever. Until then, it exists to keep
+L<Test::Pod::Coverage|Test::Pod::Coverage> happy.
+
+=end comment
+
+=head2 all_verbatim_ok
+
+This subroutine reads the files specified in its arguments, and tests
+all text files found therein. Directories are searched recursively. If
+no arguments are specified, the default is C<qw{ blib eg t }>.
+
+The heavy lifting is done by L<file_verbatim_ok()|/file_verbatim_ok>.
+
+This returns a true value if all tests pass or skip, and a false value
+if any test fails.
+
+=head2 configure_file_verbatim
+
+This subroutine reads and executes the specified configuration file.
+See L<CONFIGURATION|/CONFIGURATION>, below for details.
+
+=head2 files_are_identical_ok
+
+ files_are_identical_ok $file, $source;
+
+This subroutine tests whether the files specified by the two arguments
+are identical.
+
+This returns a true value if the test passes, and a false value if it
+fails.
+
+=head2 file_contains_ok
+
+ file_contains_ok $file, $source
+
+This subroutine tests whether the file specified by the first argument
+contains the file specified in the second argument.
+
+This returns a true value if the test passes, and a false value if it
+fails.
+
+=head2 file_verbatim_ok
+
+ file_verbatim_ok $path;
+
+This subroutine tests the given file. It is opened and read, looking for
+C<## VERBATIM> comments starting at the beginning of the line. These
+define or configure the testing as follows:
+
+=over
+
+=item ## VERBATIM BEGIN source-module-or-file
+
+This annotation marks the beginning of a block of text that comes
+verbatim from the specified source. If the source does not exist, a
+BAIL_OUT is generated, ending the test.
+
+The source is read and cached. Then the file being tested is read until
+a C<'## VERBATIM END'> annotation is found. A BAIL_OUT is generated if
+this is not found.
+
+If the process gets this far, a test is generated, which passes if the
+verbatim block is found in the source, and fails if not.
+
+=item ## VERBATIM END
+
+This annotation ends a verbatim block.
+
+=item ## VERBATIM CONFIGURE item ...
+
+This annotation specifies a configuration item.
+See L<CONFIGURATION|/CONFIGURATION>, below for details.
+
+=item ## VERBATIM EXPECT number
+
+This annotation specifies the number of verbatim blocks expected. If it
+is specified, then when the file being tested is completely read, a test
+is generated to determine whether the specified number of verbatim
+blocks was found.
+
+If this is specified more than once, the last-specified value is used
+for the test.
+
+=back
+
+If no verbatim blocks are found, or if the file is binary, a skipped
+test is generated. A BAIL_OUT is generated if the file can not be
+opened, or if a VERBATIM annotation is found that can not be
+interpreted.
+
+This returns a true value if all tests pass or skip, and a false value
+if any test fails.
+
+=head1 CONFIGURATION
+
+Configuration can be done either by calling
+L<configure_file_verbatim()|/configure_file_verbatim> and passing it a
+configuration file (either name, URL, or SCALAR reference), or by
+specifying a C<## VERBATIM CONFIGURE> annotation.
+
+Either way the specification is parsed by
+L<Text::ParseWords::shellwords()|Text::ParseWords> into a configuration
+item name and arguments for that item. Configuration item names are not
+case-sensitive, but the arguments may be.
+
+The following configuration items are supported:
+
+=over
+
+=item encoding
+
+This specifies file encodings. It takes either one or two arguments. The
+first is the encoding name (e.g. C<'utf-8'>.
+
+If a second argument is specified it
+is the name of the file to which the encoding applies. File names are
+matched by case-sensitive string comparison, so (for example)
+
+ encoding utf-8 foo/bar
+
+will not be applied to F<./foo/bar>.
+
+If a second argument is not specified, the encoding becomes the default
+encoding for files not specified explicitly. Specifying C<''> selects
+the system's default encoding (ISO-LATIN-1, or some such).
+
+The default is C<''>.
+
+=item trim
+
+This specifies whether leading and trailing white space is trimmed
+before comparison. The argument is normally interpreted as a Perl
+Boolean, but case-insensitive strings C<'no'>, C<'off'>, and C<'false'>
+have been special-cased to yield false values.
+
+The default is C<0> -- that is, do not trim.
+
+=back
+
+Empty lines and lines whose first non-blank character is C<'#'> are
+ignored.
+
+=head1 SEE ALSO
+
+L<Test::Builder>
+
+L<Test::File::Cmp|Test::File::Cmp> by Abdul al Hazred (AAHAZRED)
+compares files independently of line breaks. Files are specified by
+path.
+
+L<Test::File::Content|Test::File::Content> by Moritz Onken (PERLER)
+tests files for the presence or absence of specified strings or regular
+expressions. Files can be specified by directory and file name
+extension.
+
+L<Test::File::Contents|Test::File::Contents> by Kirrily Robert, David E.
+Wheeler, and Αριστοτέλης Παγκαλτζής (ARISTOTLE) compares files to
+strings or regular expressions, with the option of C<diff> output on
+failure. Files are specified by path.
+
+=head1 SUPPORT
+
+Support is by the author. Please file bug reports at
+L<https://rt.cpan.org/Public/Dist/Display.html?Name=Test-File-Verbatim>,
+L<https://github.com/trwyant/perl-Test-File-Verbatim/issues/>, or in
+electronic mail to the author.
+
+=head1 AUTHOR
+
+Thomas R. Wyant, III F<wyant at cpan dot org>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2022 by Thomas R. Wyant, III
+
+This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl 5.10.0. For more details, see the full text
+of the licenses in the directory LICENSES.
+
+This program is distributed in the hope that it will be useful, but
+without any warranty; without even the implied warranty of
+merchantability or fitness for a particular purpose.
+
+=cut
+
+# ex: set textwidth=72 :

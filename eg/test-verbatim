@@ -1,0 +1,147 @@
+#!/usr/bin/env perl
+
+use 5.010;
+
+use strict;
+use warnings;
+
+use Getopt::Long 2.33 qw{ :config auto_version };
+use Pod::Usage;
+use Test::More 0.88;
+use Test::File::Verbatim;
+
+our $VERSION = '0.000_001';
+
+my %opt;
+
+GetOptions( \%opt,
+    qw{ blib! encoding=s },
+    'all!'	=> sub { delete $opt{identical}; $opt{$_[0]} = $_[1]; },
+    'file!'	=> sub { $_[1] and delete @opt{ qw{ all identical } }; },
+    'identical!'	=> sub { delete $opt{all}; $opt{$_[0]} = $_[1]; },
+    'lib=s'	=> sub { require lib; lib->import( $_[1] ); },
+    help => sub { pod2usage( { -verbose => 2 } ) },
+) or pod2usage( { -verbose => 0 } );
+
+if ( $opt{blib} ) {
+    require blib;
+    blib->import();
+}
+
+defined $opt{encoding}
+    and file_encoding( $opt{encoding} );
+
+if ( $opt{identical} ) {
+    while ( @ARGV ) {
+	my ( $path, $source ) = splice @ARGV, 0, 2;
+	files_are_identical_ok( $path, $source );
+    }
+} elsif ( $opt{all} ) {
+    all_verbatim_ok( @ARGV );
+} else {
+    file_verbatim_ok( $_ ) for @ARGV;
+}
+
+done_testing;
+
+__END__
+
+=head1 TITLE
+
+test-verbatim - Execute Test::File::Verbatim tests
+
+=head1 SYNOPSIS
+
+ test-verbatim file_to_test.PL
+ test_verbatim --all
+ test_verbatim --identical LICENSES/Copying \
+     https://www.gnu.org/licenses/old-licenses/gpl-1.0.txt
+ test-verbatim --help
+ test-verbatim --version
+
+=head1 OPTIONS
+
+=head2 --all
+
+If this Boolean option is asserted, an C<all_verbatim_ok()> test is run,
+with any command line arguments being passed to it.
+
+The default is C<--no-all>.
+
+=head2 --blib
+
+If this Boolean option is asserted, the equivalent of C<use blib;> is
+done before running the tests.
+
+The default is C<--no-blib>.
+
+=head2 --encoding
+
+ --encoding utf-8
+
+This option specifies the encoding of the files. It does not apply to
+files fetched by URL. If specified more than once, the last-specified
+wins.
+
+=head2 --file
+
+If this Booean option is asserted, an C<file_verbatim_ok()> test is run
+on each command line argument.
+
+The default is C<--file>.
+
+=head2 --help
+
+This option displays the documentation for this script. The script then
+exits.
+
+=head2 --identical
+
+If this Boolean option is asserted, C<files_are_identical_ok()> tests are
+run on pairs of command line options.
+
+The default is C<--no-identical>.
+
+=head2 --lib
+
+ --lib lib/
+
+This option does the equivalent of C<use lib> on its argument. It can be
+specified more than once.
+
+=head2 --version
+
+This option displays the version of this script. The script then exits.
+
+=head1 DETAILS
+
+This Perl script runs L<Test::File::Verbatim|Test::File::Verbatim> tests on the
+files specified on the command line.
+
+Which specific tests are run is determined by the L<--all|/--all>,
+L<--file|/--file>, and L<--identical|/--identical> options. If more than
+one of these is asserted, the last-specified wins. If none is asserted,
+the default is L<--file|/--file>.
+
+The interpretation of command line arguments depends on the test being
+run. See the individual options for details.
+
+=head1 AUTHOR
+
+Thomas R. Wyant, III F<wyant at cpan dot org>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2022 by Thomas R. Wyant, III
+
+This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl 5.10.0. For more details, see the full text
+of the licenses in the directory LICENSES.
+
+This program is distributed in the hope that it will be useful, but
+without any warranty; without even the implied warranty of
+merchantability or fitness for a particular purpose.
+
+=cut
+
+# ex: set textwidth=72 :
