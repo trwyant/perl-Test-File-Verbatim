@@ -17,7 +17,7 @@ sub new {
 sub get {
     my ( $self, $url ) = @_;
     state $canned = {
-	'https://limmerick.org/boat.html'	=> {
+	'https://limerick.org/boat.html'	=> {
 	    content	=> <<'EOD',
 There was an old man in a boat,
 Who said, "I'm afloat! I'm afloat!"

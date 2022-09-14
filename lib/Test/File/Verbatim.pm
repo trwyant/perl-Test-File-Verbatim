@@ -395,7 +395,7 @@ sub _get_handle_scheme_http {
     my $resp = $ua->get( $uri_obj->as_string() );
     $resp->{success}
 	or $self->_bail_out(
-	"$resp->{status} $resp->{reason} $resp->{content}" );
+	"$url $resp->{status} $resp->{reason}" );
     local $_ = $resp->{headers}{'content-type'};
     defined
 	or $self->_bail_out( "$url did not return content-type" );

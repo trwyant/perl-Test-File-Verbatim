@@ -97,7 +97,7 @@ EOD
 
     is_deeply $TEST->__get_log(),
     [
-	[ ok => 1, 't/data/text/test_05.txt line 1 verbatim block found in https://limmerick.org/boat.html', [ 1 ] ],
+	[ ok => 1, 't/data/text/test_05.txt line 1 verbatim block found in https://limerick.org/boat.html', [ 1 ] ],
     ],  't/data/text/test_05.txt: trace'
 	or diag 'Got ', explain $TEST->__get_log();
 
