@@ -102,6 +102,19 @@ EOD
 	or diag 'Got ', explain $TEST->__get_log();
 
 
+
+    $TEST->__clear();
+
+    file_verbatim_ok 't/data/lib/Limerick.pod';
+
+    is_deeply $TEST->__get_log(),
+    [
+	[ ok => 1, 't/data/lib/Limerick.pod line 26 verbatim block found in Limerick', [ 1 ] ],
+    ],  't/data/lib/Limerick.pod: trace'
+	or diag 'Got ', explain $TEST->__get_log();
+
+
+
     $TEST->__clear();
 
     my $text_01 = Test::File::Verbatim::__slurp_module( 't/data/text/test_01.txt' );
@@ -145,7 +158,7 @@ EOD
     {
 	is_deeply $TEST->__get_log(),
 	[
-	    [ BAIL_OUT => "Unable to open t/data/text/missing.txt: $ENOENT" ],
+	    [ BAIL_OUT => "VERBATIM Unable to open t/data/text/missing.txt: $ENOENT" ],
 	], 't/data/text/missing.txt: trace'
 	    or diag 'Got ', explain $TEST->__get_log();
     }
@@ -155,12 +168,12 @@ EOD
 
     throws_ok { file_verbatim_ok \"## VERBATIM\n" }
 	qr< \A BAIL_OUT \b >smx,
-	'Missing ## VERBATIM sub-command: exception';
+	'Missing VERBATIM sub-command: exception';
 
     is_deeply $TEST->__get_log(),
 	[
-	    [ BAIL_OUT => '## VERBATIM sub-command missing at SCALAR line 1' ],
-	], 'Missing ## VERBATIM sub-command: trace'
+	    [ BAIL_OUT => 'VERBATIM sub-command missing at SCALAR line 1' ],
+	], 'Missing VERBATIM sub-command: trace'
 	    or diag 'Got ', explain $TEST->__get_log();
 
 
@@ -168,11 +181,11 @@ EOD
 
     throws_ok { file_verbatim_ok \"## VERBATIM FUBAR\n" }
 	qr< \A BAIL_OUT \b >smx,
-	'Invalid ## VERBATIM sub-command';
+	'Invalid VERBATIM sub-command';
 
     is_deeply $TEST->__get_log(),
 	[
-	    [ BAIL_OUT => '## VERBATIM FUBAR not recognized at SCALAR line 1' ],
+	    [ BAIL_OUT => 'VERBATIM FUBAR not recognized at SCALAR line 1' ],
 	], 'Invalid sub-command - Bailed out'
 	    or diag 'Got ', explain $TEST->__get_log();
 
@@ -185,7 +198,7 @@ EOD
 
     is_deeply $TEST->__get_log(),
 	[
-	    [ BAIL_OUT => '## VERBATIM BEGIN not terminated at SCALAR line 1' ],
+	    [ BAIL_OUT => 'VERBATIM BEGIN not terminated at SCALAR line 1' ],
 	], 'BEGIN not terminated: trace'
 	    or diag 'Got ', explain $TEST->__get_log();
 
@@ -202,7 +215,7 @@ EOD
 
     is_deeply $TEST->__get_log(),
 	[
-	    [ BAIL_OUT => "Unable to open t/data/text/missing.txt: $ENOENT at SCALAR line 1" ],
+	    [ BAIL_OUT => "VERBATIM Unable to open t/data/text/missing.txt: $ENOENT at SCALAR line 1" ],
 	], 'Source not found: trace'
 	    or diag 'Got ', explain $TEST->__get_log();
 
@@ -216,7 +229,7 @@ EOD
 
     is_deeply $TEST->__get_log(),
 	[
-	    [ BAIL_OUT => "Unable to open t/data/text/missing.txt: $ENOENT" ],
+	    [ BAIL_OUT => "VERBATIM Unable to open t/data/text/missing.txt: $ENOENT" ],
 	], 'Source not found: trace'
 	    or diag 'Got ', explain $TEST->__get_log();
 

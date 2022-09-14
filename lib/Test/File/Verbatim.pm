@@ -26,8 +26,6 @@ our $VERSION = '0.000_001';
 
 use constant REF_ARRAY		=> ref [];
 use constant URI_CLASS		=> 'Test::File::Verbatim::URI';
-use constant VERBATIM		=> '## VERBATIM ';
-use constant VERBATIM_END	=> VERBATIM . 'END';
 
 our @EXPORT_OK = qw{
     all_verbatim_ok
@@ -225,17 +223,19 @@ sub file_verbatim_ok {
     }
 
     while ( <$fh> ) {
-	m/\A\#\# VERBATIM\b/
+	m/ \A ( ( \#\# | =for ) [ ] VERBATIM ) \b/smx
 	    or next;
+	$context->{verbatim} = $1;
+	$context->{leader} = $2;
 	$context->{line} = $.;
 	chomp;
 	my ( undef, undef, $sub_cmd, $arg ) = split qr< \s+ >smx, $_, 4;
 	defined $sub_cmd
-	    or $self->_bail_out( VERBATIM, 'sub-command missing' );
+	    or $self->_bail_out( 'sub-command missing' );
 
 	$context->{line} = $.;
 	my $code = $self->can( "_verbatim_$sub_cmd" )
-	    or $self->_bail_out( VERBATIM, "$sub_cmd not recognized" );
+	    or $self->_bail_out( "$sub_cmd not recognized" );
 
 	# NOTE that the following has to be done in two steps. If I just
 	# tried $rslt &&= $self->file_verbatim_ok( $path ) no tests
@@ -254,6 +254,8 @@ sub file_verbatim_ok {
     } elsif ( ! $context->{count} ) {
 	$TEST->skip( "$context->{file_name} contains no verbatim blocks" );
     }
+
+    delete $self->{context};
 
     return $rslt;
 }
@@ -284,6 +286,7 @@ sub files_are_identical_ok {
 sub _bail_out {
     my ( $self, @reason ) = @_;
     my $context = $self->{context};
+    unshift @reason, 'VERBATIM ';
     exists $context->{file_name}
 	and exists $context->{line}
 	and push @reason, " at $context->{file_name} line $context->{line}";
@@ -400,7 +403,7 @@ sub _get_handle_scheme_http {
     defined
 	or $self->_bail_out( "$url did not return content-type" );
     m| \A text / |smx
-	or $self->_bail_out( "Content-type $_ is not text" );
+	or $self->_bail_out( "$url Content-type $_ is not text" );
     my $mode;
     if ( m/ \b charset= ( \S+ ) /smx ) {
 	$mode = "<:encoding($1)";
@@ -458,10 +461,12 @@ sub _read_verbatim_section {
 
     my $content = '';
 
+    my $end_marker = "$context->{verbatim} END\n";
+
     local $_ = undef;
     while ( <$fh> ) {
-	index $_, VERBATIM_END
-	    or return $context->{trim} ? _trim_text( $content ) : $content;
+	$_ eq $end_marker
+	    and return $context->{trim} ? _trim_text( $content ) : $content;
 	$content .= $_;
     }
 
@@ -510,7 +515,7 @@ sub _verbatim_BEGIN {
 
     $context->{count}++;
     defined( my $content = $self->_read_verbatim_section() )
-	or $self->_bail_out( VERBATIM, 'BEGIN not terminated' );
+	or $self->_bail_out( 'BEGIN not terminated' );
 
     my $name = "$context->{file_name} line $context->{line} verbatim block found in $module";
     my $rslt = index( $self->__slurp_module( $module ), $content ) >= 0;
@@ -526,15 +531,16 @@ sub _verbatim_CONFIGURE {
     } else {
 	my $context = $self->{context};
 	my $fh = $context->{file_handle};
+	my $end_marker = "$context->{verbatim} END\n";
 	my $configure_line = $.;
 	while ( <$fh> ) {
-	    index $_, VERBATIM_END
-		or return 1;
+	    $_ eq $end_marker
+		and return 1;
 	    $context->{line} = $.;
 	    $self->_configure_line( $_ );
 	}
 	$self->{context}{line} = $configure_line;
-	$self->_bail_out( VERBATIM, 'CONFIGURE not terminated' );
+	$self->_bail_out( 'CONFIGURE not terminated' );
     }
     return 1;
 }
@@ -729,8 +735,10 @@ fails.
  file_verbatim_ok $path;
 
 This subroutine tests the given file. It is opened and read, looking for
-C<## VERBATIM> comments starting at the beginning of the line. These
-define or configure the testing as follows:
+C<VERBATIM> annotations. These must begin at the beginning of the line.
+In code, they are comments of the form C<## VERBATIM>. In POD, they are
+directives of the form C<=for VERBATIM>. The following documentation
+assumes the comment form of the annotation:
 
 =over
 
