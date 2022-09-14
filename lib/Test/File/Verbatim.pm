@@ -25,6 +25,7 @@ use Text::ParseWords ();
 our $VERSION = '0.000_001';
 
 use constant REF_ARRAY		=> ref [];
+use constant URI_CLASS		=> 'Test::File::Verbatim::URI';
 use constant VERBATIM		=> '## VERBATIM ';
 use constant VERBATIM_END	=> VERBATIM . 'END';
 
@@ -332,25 +333,34 @@ sub _get_handle {
 	trim	=> 0,
     };
 
-    my $scheme;
+    if ( ref $url ) {
+	$self->{context}{file_name} //= ref $url;
+	return $self->_get_handle_open( $url );
+    }
 
-    foreach my $code (
-	sub { ref $_[0] ? 'file' : undef },
-	sub { $_[0] =~ m/ \A ( file | https? | license | module ) : /smx ?
-	    $1 : undef },
-	sub { -e $_[0] ? 'file' : undef },
-	sub { $self->_check_install( $_[0] ) ? 'module' : undef },
-	sub { $self->_check_install( "Software::License::$_[0]" ) ?
-	    'license' : undef },
-	sub { 'file' },
-    ) {
-	defined( $scheme = $code->( $url ) )
-	    and last;
+    my $uri_obj = URI_CLASS->new( $url );
+
+    my $scheme = $uri_obj->scheme();
+
+    unless ( defined $scheme ) {
+	local $_ = $url;
+	foreach my $check (
+	    [ file 	=> sub { -e } ],
+	    [ module	=> sub { $self->_check_install( $_ ) } ],
+	    [ license	=> sub {
+		    $self->_check_install( "Software::License::$_" ) } ],
+	    [ file	=> sub { 1 } ],
+	) {
+	    $check->[1]->()
+		or next;
+	    $scheme = $check->[0];
+	    last;
+	}
     }
 
     my $code = $self->can( "_get_handle_scheme_$scheme" )
 	or $self->_bail_out( "URL scheme '$scheme:' unsupported" );
-    return $code->( $self, $url );
+    return $code->( $self, $uri_obj );
 }
 
 sub _get_handle_open {
@@ -373,17 +383,16 @@ sub _get_handle_open {
 }
 
 sub _get_handle_scheme_file {
-    my ( $self, $url ) = @_;
-    ref $url
-	or $url =~ s| \A file: (?: // )? ||smx;
-    return $self->_get_handle_open( $url );
+    my ( $self, $uri_obj ) = @_;
+    return $self->_get_handle_open( $uri_obj->path() );
 }
 
 sub _get_handle_scheme_http {
-    my ( $self, $url ) = @_;
+    my ( $self, $uri_obj ) = @_;
 
+    my $url = $uri_obj->as_string();
     my $ua = __get_http_tiny();
-    my $resp = $ua->get( $url );
+    my $resp = $ua->get( $uri_obj->as_string() );
     $resp->{success}
 	or $self->_bail_out(
 	"$resp->{status} $resp->{reason} $resp->{content}" );
@@ -405,28 +414,26 @@ sub _get_handle_scheme_http {
 *_get_handle_scheme_https = \&_get_handle_scheme_http;
 
 sub _get_handle_scheme_license {
-    my ( $self, $url ) = @_;
-    my ( $module, $query ) = split /\?/, $url, 2;
-    $self->{context}{file_name} //= $url;
-    $module =~ s| \A license: |Software::License::|smx;
+    my ( $self, $uri_obj ) = @_;
+    my $module = sprintf 'Software::License::%s', $uri_obj->path();
     $self->_can_load( $module )
 	or $self->_bail_out_not_installed( $module );
-    $query //= '';
-    my %arg = map { split /=/, $_, 2 } split /[;&]/, $query;
+    my %arg = $uri_obj->query_form();
     my $method = delete( $arg{method} ) // 'license';
     $arg{holder} //= 'Anonymous';
     my $license = $module->new( \%arg );
     my $text = $license->$method();
+    $self->{context}{file_name} //= $uri_obj->as_string();
     return $self->_get_handle_open( \$text );
 }
 
 sub _get_handle_scheme_module {
-    my ( $self, $url ) = @_;
-    $url =~ s| \A module: ||smx;
-    my $path = $self->_check_install( $url )
-	or $self->_bail_out_not_installed( $url );
+    my ( $self, $uri_obj ) = @_;
+    my $module = $uri_obj->path();
+    my $path = $self->_check_install( $module )
+	or $self->_bail_out_not_installed( $module );
     # TODO can we get it from the web if it is not installed?
-    $self->{context}{file_name} //= $url;
+    $self->{context}{file_name} //= $uri_obj->as_string();
     return $self->_get_handle_open( $path );
 }
 
@@ -538,6 +545,31 @@ sub _verbatim_EXPECT {
 
     ( $context->{expect} ) = split qr< \s+ >smx, $arg, 2;
     return 1;
+}
+
+package Test::File::Verbatim::URI;	## no critic (Modules::ProhibitMultiplePackages)
+
+{
+    my @parts = qw{ scheme authority path query fragment };
+
+    sub new {
+	my ( $class, $uri ) = @_;
+	my %self = ( as_string => $uri );
+	@self{ @parts } =
+	$uri =~ m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
+	return bless \%self, $class;
+    }
+
+    foreach my $method ( @parts, qw{ as_string } ) {
+	no strict 'refs';
+	*$method = sub { return $_[0]->{$method} };
+    }
+
+    sub query_form {
+	my ( $self ) = @_;
+	return( map { split /=/, $_, 2 } split /[&;]/, $self->query() // '' );
+    }
+
 }
 
 1;

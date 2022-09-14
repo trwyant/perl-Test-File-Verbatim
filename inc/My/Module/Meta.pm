@@ -87,7 +87,9 @@ sub module_name {
 
 sub no_index {
     return +{
-	directory => [ qw{ inc t xt } ],
+	directory	=> [ qw{ inc t xt } ],
+	# The following causes the indexer to ignore Test::File::Verbatim::*
+	namespace	=> [ qw{ Test::File::Verbatim } ],
     };
 }
 
