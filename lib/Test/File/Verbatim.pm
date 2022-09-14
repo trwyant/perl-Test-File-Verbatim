@@ -169,9 +169,7 @@ sub _configure_interpret_boolean {
 sub file_contains_ok {
     my ( $self, $path, $source ) = _get_args( @_ );
 
-    $self->{context} = {
-	trim	=> 0,
-    };
+    delete local $self->{context};
 
     # Because this gets us a pre-built object I use $Test::Builder::Level
     # (localized) to get tests reported relative to the correct file and
@@ -181,8 +179,8 @@ sub file_contains_ok {
 
     return $TEST->ok(
 	index(
-	    $self->__slurp_module( $path ),
-	    $self->__slurp_module( $source ),
+	    $self->_slurp_url( $path ),
+	    $self->_slurp_url( $source ),
 	) >= 0,
 	sprintf( '%s contains %s',
 	    ref $path || $path,
@@ -211,9 +209,7 @@ sub file_verbatim_ok {
     my $TEST = __get_test_builder();
     local $Test::Builder::Level = _nest_depth();
 
-    my $context = $self->{context} = {
-	trim	=> 0,
-    };
+    delete local $self->{context};
 
     my $fh = $self->_get_handle( $path );
 
@@ -221,6 +217,8 @@ sub file_verbatim_ok {
 	$TEST->skip( "$path is binary" );
 	return $rslt;
     }
+
+    my $context = $self->{context};
 
     while ( <$fh> ) {
 	m/ \A ( ( \#\# | =for ) [ ] VERBATIM ) \b/smx
@@ -255,17 +253,13 @@ sub file_verbatim_ok {
 	$TEST->skip( "$context->{file_name} contains no verbatim blocks" );
     }
 
-    delete $self->{context};
-
     return $rslt;
 }
 
 sub files_are_identical_ok {
     my ( $self, $path, $source ) = _get_args( @_ );
 
-    $self->{context} = {
-	trim	=> 0,
-    };
+    delete local $self->{context};
 
     # Because this gets us a pre-built object I use $Test::Builder::Level
     # (localized) to get tests reported relative to the correct file and
@@ -274,8 +268,8 @@ sub files_are_identical_ok {
     local $Test::Builder::Level = _nest_depth();
 
     return $TEST->is_eq(
-	$self->__slurp_module( $path ),
-	$self->__slurp_module( $source ),
+	$self->_slurp_url( $path ),
+	$self->_slurp_url( $source ),
 	sprintf( '%s is identical to %s',
 	    ref $path || $path,
 	    ref $source || $source,
@@ -332,9 +326,8 @@ sub __get_http_tiny {
 
 sub _get_handle {
     my ( $self, $url ) = @_;
-    $self->{context} ||= {
-	trim	=> 0,
-    };
+
+    $self->_init_context();
 
     if ( ref $url ) {
 	$self->{context}{file_name} //= ref $url;
@@ -447,6 +440,14 @@ sub __get_test_builder {
     return $TEST;
 }
 
+sub _init_context {
+    my ( $self ) = @_;
+    $self->{context} ||= {
+	trim	=> 0,
+    };
+    return $self->{context};
+}
+
 sub _nest_depth {
     my $nest = 0;
     state $ignore = { map { $_ => 1 } __PACKAGE__, qw{ DB File::Find } };
@@ -475,19 +476,23 @@ sub _read_verbatim_section {
 
 # This gets called as a convenience (and encapsulation violation) from
 # t/verbatim.t, and so needs the argument processing.
-sub __slurp_module {
-    my ( $self, $module ) = _get_args( @_ );
+sub __slurp {
+    my ( $self, $url ) = _get_args( @_ );
+    delete local $self->{context};
+    return $self->_slurp_url( $url );
+}
 
-    my $context = $self->{context} ||= {
-	trim	=> 0,
-    };
+sub _slurp_url {
+    my ( $self, $url ) = _get_args( @_ );
 
-    my $cache = $self->{cache}{$module} ||= [];
+    my $cache = $self->{cache}{$url} ||= [];
     $cache->[0] ||= do {
-	my $fh = $self->_get_handle( $module );
+	my $fh = $self->_get_handle( $url );
 	local $/ = undef;
 	<$fh>;
     };
+
+    my $context = $self->_init_context();
 
     if ( $context->{trim} ) {
 	$cache->[$context->{trim}] ||= _trim_text( $cache->[0] );
@@ -518,7 +523,7 @@ sub _verbatim_BEGIN {
 	or $self->_bail_out( 'BEGIN not terminated' );
 
     my $name = "$context->{file_name} line $context->{line} verbatim block found in $module";
-    my $rslt = index( $self->__slurp_module( $module ), $content ) >= 0;
+    my $rslt = index( $self->_slurp_url( $module ), $content ) >= 0;
 
     return $TEST->ok( $rslt, $name );
 }

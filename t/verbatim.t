@@ -117,7 +117,7 @@ EOD
 
     $TEST->__clear();
 
-    my $text_01 = Test::File::Verbatim::__slurp_module( 't/data/text/test_01.txt' );
+    my $text_01 = Test::File::Verbatim::__slurp( 't/data/text/test_01.txt' );
     files_are_identical_ok 't/data/text/test_01.txt', 't/data/text/test_01.txt';
 
     is_deeply $TEST->__get_log(),
