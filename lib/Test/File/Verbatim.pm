@@ -49,6 +49,7 @@ our %EXPORT_TAGS = (
 	my ( $class ) = @_;
 	return ( $test = bless {
 		default_encoding	=> '',
+		trim			=> 0,
 	    }, $class );
     }
 
@@ -130,30 +131,32 @@ sub _configure_parsed {
     my $verb = shift @argv;
     my $code = $self->can( "_configure_verb_\L$verb" )
 	or $self->_bail_out( "Configuration item $verb unknown" );
-    $code->( $self, @argv );
+    my $context = $self->{context} || $self;
+    $code->( $self, $context, @argv );
     return;
 }
 
 sub _configure_verb_encoding {
-    my ( $self, $encoding, $path ) = @_;
+    my ( $self, $context, $encoding, $path ) = @_;
     $encoding //= '';
     if ( defined $path ) {
-	if ( $self->{file_encoding}{$path} ne $encoding ) {
-	    delete $self->{cache}{$path};
-	    $self->{file_encoding}{$path} = $encoding;
+	if ( $context->{file_encoding}{$path} eq $encoding ) {
+	    # Ignore it.
+	} elsif ( $self->{cache}{$path} ) {
+	    $self->_diagnostic(
+		"Encoding '$encoding' ignored; $path already read" );
+	} else {
+	    $context->{file_encoding}{$path} = $encoding;
 	}
     } else {
-	if ( $self->{default_encoding} ne $encoding ) {
-	    delete $self->{cache};
-	    $self->{default_encoding} = $encoding;
-	}
+	$context->{default_encoding} = $encoding;
     }
     return;
 }
 
 sub _configure_verb_trim {
-    my ( $self, $value ) = @_;
-    $self->{context}{trim} = _configure_interpret_boolean( $value );
+    my ( undef, $context, $value ) = @_;	# Invocant unused
+    $context->{trim} = _configure_interpret_boolean( $value );
     return;
 }
 
@@ -277,14 +280,21 @@ sub files_are_identical_ok {
     );
 }
 
-sub _bail_out {
+sub _adjust_reason {
     my ( $self, @reason ) = @_;
     my $context = $self->{context};
     unshift @reason, 'VERBATIM ';
     exists $context->{file_name}
 	and exists $context->{line}
 	and push @reason, " at $context->{file_name} line $context->{line}";
+    return @reason;
+}
 
+sub _bail_out {
+    my ( $self, @reason ) = @_;
+
+    @reason = $self->_adjust_reason( @reason );
+    #
     # Because this gets us a pre-built object I use $Test::Builder::Level
     # (localized) to get tests reported relative to the correct file and
     # line, rather than setting the 'level' attribute.
@@ -315,6 +325,22 @@ sub _check_install {
     my $data = Module::Load::Conditional::check_install( module => $module )
 	or return;
     return $data->{file};
+}
+
+sub _diagnostic {
+    my ( $self, @reason ) = @_;
+
+    @reason = $self->_adjust_reason( @reason );
+
+    # Because this gets us a pre-built object I use $Test::Builder::Level
+    # (localized) to get tests reported relative to the correct file and
+    # line, rather than setting the 'level' attribute.
+    my $TEST = __get_test_builder();
+    local $Test::Builder::Level = _nest_depth();
+
+    local $" = '';
+    $TEST->diagnostic( "@reason" );
+    return;	# Can't get here, but Perl::Critic does not know this.
 }
 
 # This gets used so that we can hot-patch in a mock class for testing
@@ -797,7 +823,9 @@ if any test fails.
 
 Configuration can be done either by calling
 L<configure_file_verbatim()|/configure_file_verbatim> (q.v.) or by
-specifying a C<## VERBATIM CONFIGURE> annotation.
+specifying a C<## VERBATIM CONFIGURE> annotation. In the former case the
+configuration change is global. In the latter, it is local to the file
+in which the C<## VERBATIM> annotation appeared.
 
 Either way the specification is parsed by
 L<Text::ParseWords::shellwords()|Text::ParseWords> into a configuration
@@ -824,6 +852,15 @@ will not be applied to F<./foo/bar>.
 If a second argument is not specified, the encoding becomes the default
 encoding for files not specified explicitly. Specifying C<''> selects
 the system's default encoding (ISO-LATIN-1, or some such).
+
+Files are read with the encoding valid at the time they are read.
+Subsequent changes will not affect them. An attempt to change the
+file-specific encoding of a file that has already been read will be
+ignored with a diagnostic.
+
+This configuration item is ignored for C<http:> and C<https:> URLs.
+These are decoded using the information in the C<Content-Type> header,
+if any.
 
 The default is C<''>.
 
