@@ -150,15 +150,18 @@ sub _all_verbatim_ok_exclude_file_Regexp {
 }
 
 sub configure_file_verbatim {
-    my ( $self, $path ) = _get_args( @_ );
-    if ( REF_ARRAY eq ref $path ) {
-	$self->_configure_parsed( @{ $path } );
-    } else {
-	my $fh = $self->_get_handle( $path );
-	while ( <$fh> ) {
-	    $self->_configure_line( $_ );
+    my ( $self, @argv ) = _get_args( @_ );
+    foreach my $path ( @argv ) {
+	if ( REF_ARRAY eq ref $path ) {
+	    $self->_configure_parsed( @{ $path } );
+	} else {
+	    local $self->{cache} = $self->{cache};
+	    my $fh = $self->_get_handle( $path );
+	    while ( <$fh> ) {
+		$self->_configure_line( $_ );
+	    }
+	    close $fh;
 	}
-	close $fh;
     }
     return;
 }
@@ -853,9 +856,9 @@ Any other options will cause the test to BAIL_OUT.
  configure_file_verbatim \'encoding utf-8';
  configure_file_verbatim [ encoding => 'utf-8' ];
 
-This subroutine configures the test. It takes a single argument, which
-can be a file name, an C<http:> or C<https:> URL, a reference to a
-scalar specifying the configuration, or a reference to an array
+This subroutine configures the test. It takes multiple arguments, each
+of which can be a file name, an C<http:> or C<https:> URL, a reference
+to a scalar specifying the configuration, or a reference to an array
 containing a single configuration item name and its arguments.
 
 See L<CONFIGURATION|/CONFIGURATION>, below for details.
