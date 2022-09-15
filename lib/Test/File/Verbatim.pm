@@ -158,6 +158,7 @@ sub configure_file_verbatim {
 	    local $self->{cache} = $self->{cache};
 	    my $fh = $self->_get_handle( $path );
 	    while ( <$fh> ) {
+		s/ \r $ //smx;
 		$self->_configure_line( $_ );
 	    }
 	    close $fh;
@@ -287,6 +288,7 @@ sub file_verbatim_ok {
     while ( <$fh> ) {
 	m/ \A ( ( \#\# | =for ) [ ] VERBATIM ) \b/smx
 	    or next;
+	s/ \r $ //smx;
 	$context->{verbatim} = $1;
 	$context->{leader} = $2;
 	$context->{line} = $.;
@@ -584,7 +586,8 @@ sub _slurp_url {
     $cache->[0] ||= do {
 	my $fh = $self->_get_handle( $url );
 	local $/ = undef;
-	<$fh>;
+	( my $text = <$fh> ) =~ s/ \r $ //smxg;
+	$text;
     };
 
     my $context = $self->_init_context();
