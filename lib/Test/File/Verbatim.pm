@@ -18,6 +18,7 @@ use Exporter qw{ import };
 use File::Find ();
 use HTTP::Tiny;
 use Module::Load::Conditional ();
+use Pod::Perldoc;
 use Scalar::Util ();
 use Test::Builder;
 use Text::ParseWords ();
@@ -459,6 +460,20 @@ sub _get_handle_scheme_module {
     return $self->_get_handle_open( $path );
 }
 
+sub _get_handle_scheme_pod {
+    my ( $self, $uri_obj ) = @_;
+    my $module = $uri_obj->path();
+    my $pp = Pod::Perldoc->new();
+    my @found = eval {
+	open my $fh, '>', \my $text	## no critic (RequireBriefOpen)
+	    or $self->_bail_out( "Failed to open SCALAR ref: $!" );
+	local *STDERR = $fh;
+	$pp->maybe_extend_searchpath();
+	$pp->grand_search_init( [ $module ] );
+    } or $self->_bail_out( "POD not found for $module" );
+    return $self->_get_handle_open( $found[0] );
+}
+
 # This gets used so that we can hot-patch in a mock class for testing
 # purposes.
 sub __get_test_builder {
@@ -593,7 +608,10 @@ package Test::File::Verbatim::URI;	## no critic (Modules::ProhibitMultiplePackag
 	my ( $class, $uri ) = @_;
 	my %self = ( as_string => $uri );
 	@self{ @parts } =
+## VERBATIM CONFIGURE trim on
+## VERBATIM BEGIN pod:URI
 	$uri =~ m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
+## VERBATIM END
 	return bless \%self, $class;
     }
 
@@ -684,6 +702,13 @@ the L<URI|URI> documentation.
 This is handled by passing the path portion of the URL to
 L<Module::Load::Conditional::check_install()|Module::Load::Conditional>.
 If it can find the module, the normal Perl file I/O mechanism is used.
+
+=item pod:
+
+POD files are found using the mostly-undocumented
+L<Pod::Perldoc|Pod::Perldoc> module, which does the heavy lifting for
+the C<perldoc> program. Once found, the normal Perl file I/O mechanism
+is used.
 
 =back
 

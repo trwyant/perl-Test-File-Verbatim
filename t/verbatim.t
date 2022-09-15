@@ -109,8 +109,24 @@ EOD
 
     is_deeply $TEST->__get_log(),
     [
-	[ ok => 1, 't/data/lib/Limerick.pod line 26 verbatim block found in Limerick', [ 1 ] ],
+	[ ok => 1, 't/data/lib/Limerick.pod line 27 verbatim block found in Limerick', [ 1 ] ],
     ],  't/data/lib/Limerick.pod: trace'
+	or diag 'Got ', explain $TEST->__get_log();
+
+
+
+    $TEST->__clear();
+
+    file_verbatim_ok \<<'EOD';
+## VERBATIM BEGIN pod:Limerick
+Limerick - Grist for the Test::File::Verbatim mill
+## VERBATIM END
+EOD
+
+    is_deeply $TEST->__get_log(),
+    [
+	[ ok => 1, 'SCALAR line 1 verbatim block found in pod:Limerick', [ 1 ] ],
+    ],  'SCALAR pod: URL: trace'
 	or diag 'Got ', explain $TEST->__get_log();
 
 

@@ -155,6 +155,7 @@ sub requires {
 	'Scalar::Util'	=> 0,	# Perl 5.7.3
 	'Test::Builder'	=> 0,	# Perl 5.6.2
 	'Text::ParseWords'	=> 0,	# Perl 5.0
+	'Pod::Perldoc'	=> 0,	# Perl 5.8.1
 	constant	=> 0,	# Perl 5.4
 	strict		=> 0,	# Perl 5.0
 	utf8		=> 0,	# Perl 5.6.0

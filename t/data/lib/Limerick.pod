@@ -10,8 +10,9 @@ Limerick - Grist for the Test::File::Verbatim mill
 =head1 DESCRIPTION
 
 This unsupported module serves no useful purpose in and of itself. It
-exists only to support testing of L<Test::File::Verbatim|Test::File::Verbatim>, and
-may be changed or revoked without notice.
+exists only to support testing of
+L<Test::File::Verbatim|Test::File::Verbatim>, and may be changed or
+revoked without notice.
 
 =head1 METHODS
 
