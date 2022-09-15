@@ -61,7 +61,7 @@ sub ok {
 sub skip {
     my ( $self, @arg ) = @_;
     push @{ $self->{log} }, [ skip => @arg, [] ];
-    return;
+    return 1;
 }
 
 sub AUTOLOAD {

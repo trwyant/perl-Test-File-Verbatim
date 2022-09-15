@@ -85,7 +85,7 @@ EOD
 
     is_deeply $TEST->__get_log(),
     [
-	[ skip => 't/data/text/test_04.txt contains no verbatim blocks', [] ],
+	[ skip => 't/data/text/test_04.txt is empty', [] ],
     ],  't/data/text/test_04.txt - Empty file: trace'
 	or diag 'Got ', explain $TEST->__get_log();
 
@@ -117,7 +117,8 @@ EOD
 
     $TEST->__clear();
 
-    file_verbatim_ok \<<'EOD';
+    my $leader = '##';
+    file_verbatim_ok \<<"EOD";
 ## VERBATIM BEGIN pod:Limerick
 Limerick - Grist for the Test::File::Verbatim mill
 ## VERBATIM END
@@ -269,6 +270,8 @@ file_verbatim_ok 't/data/text/test_05.txt';
 
 all_verbatim_ok map { sprintf 't/data/text/test_%02d.txt', $_ } 1 .. 4;
 
+all_verbatim_ok { exclude => [ qr| \A t/data/ |smx ] };
+
 files_are_identical_ok 't/data/text/test_01.txt', 't/data/text/test_01.txt';
 
 note <<'EOD';
@@ -278,6 +281,7 @@ Test with encoding utf-8
 EOD
 
 configure_file_verbatim \<<'EOD';
+flush
 encoding utf-8
 EOD
 

@@ -151,6 +151,7 @@ sub requires {
 	'Exporter'	=> 0,	# Perl 5.0
 	'File::Find'	=> 0,	# Perl 5.0
 	'HTTP::Tiny'	=> 0,	# Perl 5.13.9
+	'List::Util'	=> 1.33,	# Perl 5.7.3
 	'Module::Load::Conditional'	=> 0,	# Perl 5.9.5
 	'Scalar::Util'	=> 0,	# Perl 5.7.3
 	'Test::Builder'	=> 0,	# Perl 5.6.2

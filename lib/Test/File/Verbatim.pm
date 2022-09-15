@@ -17,6 +17,7 @@ use utf8;
 use Exporter qw{ import };
 use File::Find ();
 use HTTP::Tiny;
+use List::Util 1.33 ();	# for any()
 use Module::Load::Conditional ();
 use Pod::Perldoc;
 use Scalar::Util ();
@@ -26,6 +27,7 @@ use Text::ParseWords ();
 our $VERSION = '0.000_001';
 
 use constant REF_ARRAY		=> ref [];
+use constant REF_HASH		=> ref {};
 use constant URI_CLASS		=> 'Test::File::Verbatim::URI';
 
 our @EXPORT_OK = qw{
@@ -49,6 +51,7 @@ our %EXPORT_TAGS = (
     sub new {
 	my ( $class ) = @_;
 	return ( $test = bless {
+		cache			=> {},
 		default_encoding	=> '',
 		trim			=> 0,
 	    }, $class );
@@ -67,10 +70,15 @@ our %EXPORT_TAGS = (
 
 sub all_verbatim_ok {
     my ( $self, @arg ) = _get_args( @_ );
+    my $opt = REF_HASH eq ref $arg[-1] ? pop @arg : {};
+    state $valid_opt = { map { $_ => 1 } qw{ exclude } };
+    my @bad_opt;
+    @bad_opt = grep { ! $valid_opt->{$_} } sort keys %{ $opt }
+	and $self->_bail_out( "Bad options: @bad_opt" );
     @arg
 	or @arg = grep { -d } qw{ blib t eg };
     my $rslt = 1;
-    foreach my $path ( map { $self->_all_verbatim_ok_expand_topic() } @arg ) {
+    foreach my $path ( map { $self->_all_verbatim_ok_expand_topic( $opt ) } @arg ) {
 	# NOTE that the following has to be done in two steps. If I just
 	# tried $rslt &&= $self->file_verbatim_ok( $path ) no tests
 	# would be run after the first failure, because it would
@@ -82,22 +90,63 @@ sub all_verbatim_ok {
 }
 
 sub _all_verbatim_ok_expand_topic {
+    my ( $self, $opt ) = @_;
     ref
 	and return $_;
     if ( -d ) {
 	my @rslt;
 	File::Find::find(
-	    sub {
-		-d
-		    or -z _
-		    or -B _
-		    or push @rslt, $File::Find::name;
+	    {
+		wanted	=> sub {
+		    -d
+			and return;
+		    $self->_all_verbatim_ok_exclude_file( $opt->{exclude} )
+			and return $self->_do_test(
+			skip => "$_ excluded from testing" );
+		    push @rslt, $_;
+		    return;
+		},
+		no_chdir	=> 1,
 	    },
 	    $_,
 	);
 	return @rslt;
     }
     return $_;
+}
+
+sub _all_verbatim_ok_exclude_file {
+    my ( $self, $exclude ) = @_;
+    my $ref = ref $exclude;
+    my $code = $self->can( "_all_verbatim_ok_exclude_file_$ref" )
+	or $self->_bail_out( "Unsupported $ref ref in exclude" );
+    goto $code;
+}
+
+sub _all_verbatim_ok_exclude_file_ {
+    my ( undef, $exclude ) = @_;
+    return $_ eq $exclude;
+}
+
+sub _all_verbatim_ok_exclude_file_ARRAY {
+    my ( $self, $exclude ) = @_;
+    return List::Util::any { $self->_all_verbatim_ok_exclude_file( $_ ) }
+    @{ $exclude };
+}
+
+sub _all_verbatim_ok_exclude_file_CODE {
+    my ( $self, $exclude ) = @_;
+    return $exclude->( $self );
+}
+
+sub _all_verbatim_ok_exclude_file_HASH {
+    my ( undef, $exclude ) = @_;
+    return $exclude->{$_};
+}
+
+sub _all_verbatim_ok_exclude_file_Regexp {
+    my ( undef, $exclude ) = @_;
+    return $_ =~ $exclude;
 }
 
 sub configure_file_verbatim {
@@ -155,6 +204,16 @@ sub _configure_verb_encoding {
     return;
 }
 
+sub _configure_verb_flush {
+    my ( $self, undef, @argv ) = @_;
+    if ( @argv ) {
+	delete $self->{cache}{$_} for @argv;
+    } else {
+	%{ $self->{cache} } = ();
+    }
+    return;
+}
+
 sub _configure_verb_trim {
     my ( undef, $context, $value ) = @_;	# Invocant unused
     $context->{trim} = _configure_interpret_boolean( $value );
@@ -175,13 +234,7 @@ sub file_contains_ok {
 
     delete local $self->{context};
 
-    # Because this gets us a pre-built object I use $Test::Builder::Level
-    # (localized) to get tests reported relative to the correct file and
-    # line, rather than setting the 'level' attribute.
-    my $TEST = __get_test_builder();
-    local $Test::Builder::Level = _nest_depth();
-
-    return $TEST->ok(
+    return $self->_do_test( ok	=>
 	index(
 	    $self->_slurp_url( $path ),
 	    $self->_slurp_url( $source ),
@@ -217,10 +270,14 @@ sub file_verbatim_ok {
 
     my $fh = $self->_get_handle( $path );
 
-    if ( -B $path && ! -z _ ) {
-	$TEST->skip( "$path is binary" );
-	return $rslt;
-    }
+    -d $fh
+	and return $TEST->skip( "$path is a directory" );
+
+    -z _
+	and return $TEST->skip( "$path is empty" );
+
+    -B _
+	and return $TEST->skip( "$path is binary" );
 
     my $context = $self->{context};
 
@@ -265,13 +322,7 @@ sub files_are_identical_ok {
 
     delete local $self->{context};
 
-    # Because this gets us a pre-built object I use $Test::Builder::Level
-    # (localized) to get tests reported relative to the correct file and
-    # line, rather than setting the 'level' attribute.
-    my $TEST = __get_test_builder();
-    local $Test::Builder::Level = _nest_depth();
-
-    return $TEST->is_eq(
+    return $self->_do_test( is_eq =>
 	$self->_slurp_url( $path ),
 	$self->_slurp_url( $source ),
 	sprintf( '%s is identical to %s',
@@ -295,16 +346,9 @@ sub _bail_out {
     my ( $self, @reason ) = @_;
 
     @reason = $self->_adjust_reason( @reason );
-    #
-    # Because this gets us a pre-built object I use $Test::Builder::Level
-    # (localized) to get tests reported relative to the correct file and
-    # line, rather than setting the 'level' attribute.
-    my $TEST = __get_test_builder();
-    local $Test::Builder::Level = _nest_depth();
 
-    local $" = '';
-    $TEST->BAIL_OUT( "@reason" );
-    return;	# Can't get here, but Perl::Critic does not know this.
+    return $self->_do_test( BAIL_OUT =>
+	join '', @reason );
 }
 
 sub _bail_out_not_installed {
@@ -333,15 +377,22 @@ sub _diagnostic {
 
     @reason = $self->_adjust_reason( @reason );
 
-    # Because this gets us a pre-built object I use $Test::Builder::Level
-    # (localized) to get tests reported relative to the correct file and
-    # line, rather than setting the 'level' attribute.
+    return $self->_do_test( diagnostic =>
+	join '', @reason );
+}
+
+# This is intended for one-off tests. The result is returned.
+sub _do_test {
+    my ( undef, $test, @argv ) = @_;
+
+    # Because this gets us a pre-built object I use
+    # $Test::Builder::Level (localized) to get tests reported relative
+    # to the correct file and line, rather than setting the 'level'
+    # attribute.
     my $TEST = __get_test_builder();
     local $Test::Builder::Level = _nest_depth();
 
-    local $" = '';
-    $TEST->diagnostic( "@reason" );
-    return;	# Can't get here, but Perl::Critic does not know this.
+    return $TEST->$test( @argv );
 }
 
 # This gets used so that we can hot-patch in a mock class for testing
@@ -553,12 +604,6 @@ sub _verbatim_BEGIN {
     my ( $self, $module ) = @_;
     my $context = $self->{context};
 
-    # Because this gets us a pre-built object I use $Test::Builder::Level
-    # (localized) to get tests reported relative to the correct file and
-    # line, rather than setting the 'level' attribute.
-    my $TEST = __get_test_builder();
-    local $Test::Builder::Level = _nest_depth();
-
     $context->{count}++;
     defined( my $content = $self->_read_verbatim_section() )
 	or $self->_bail_out( 'BEGIN not terminated' );
@@ -566,7 +611,7 @@ sub _verbatim_BEGIN {
     my $name = "$context->{file_name} line $context->{line} verbatim block found in $module";
     my $rslt = index( $self->_slurp_url( $module ), $content ) >= 0;
 
-    return $TEST->ok( $rslt, $name );
+    return $self->_do_test( ok => $rslt, $name );
 }
 
 sub _verbatim_CONFIGURE {
@@ -730,6 +775,8 @@ If no scheme is specified, it defaults to:
 
 As a special case, C<SCALAR> references are always handled as files.
 
+With the exception of configurations, any data read are cached.
+
 =head1 SUBROUTINES
 
 This module supports the following public subroutines. All public
@@ -757,6 +804,48 @@ The heavy lifting is done by L<file_verbatim_ok()|/file_verbatim_ok>.
 
 This returns a true value if all tests pass or skip, and a false value
 if any test fails.
+
+You can specify a hash reference as the last argument. The hash
+specifies options affecting the tests generated. These are:
+
+=over
+
+=item exclude
+
+This option specifies files to be excluded from the test. Possible
+values are:
+
+=over
+
+=item * A scalar
+
+The file with the given name is excluded.
+
+=item * An ARRAY reference
+
+A file is excluded if it matches any of the exclusion specifications in
+the array.
+
+=item * A CODE reference
+
+The code will be called with the path to the file in the topic variable
+(C<$_>). It will be excluded if the code returns a true value.
+
+=item * A HASH reference
+
+A file is excluded if the hash contains a true value for that file's
+name.
+
+=item * A Regexp reference
+
+A file is excluded if its path name matches the given regular
+expression.
+
+=back
+
+=back
+
+Any other options will cause the test to BAIL_OUT.
 
 =head2 configure_file_verbatim
 
@@ -893,6 +982,11 @@ These are decoded using the information in the C<Content-Type> header,
 if any.
 
 The default is C<''>.
+
+=item flush
+
+This causes the cached data to be deleted. You might want to do this if
+you need to re-read a file with a different encoding.
 
 =item trim
 
