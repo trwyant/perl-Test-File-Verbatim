@@ -634,10 +634,9 @@ evil. The purpose of this set of tests is to provide ways to mitigate
 (but not eliminate) the problem by providing tests that fail when the
 source changes.
 
-=head1 SUBROUTINES
-
-This module supports the following public subroutines. All public
-subroutines are exportable, and in fact all are exported by default.
+This module is based directly on L<Test::Builder|Test::Builder>, and
+seems to play nicely with both L<Test::More|Test::More> and
+L<Test2::V0|Test2::V0>.
 
 In general, data are specified as URLs. The following schemes are
 recognized, some of which are distinctly non-standard:
@@ -646,8 +645,8 @@ recognized, some of which are distinctly non-standard:
 
 =item file:
 
-This is handled by the stripping the leading C<'file:'> (and C<'//'> if
-present), and then using the normal Perl file I/O mechanism.
+This is handled by passing the path portion of the URL to the normal
+Perl file I/O machinery.
 
 =item http:
 
@@ -660,8 +659,8 @@ modules are installed.
 
 =item license:
 
-This is handled by stripping replacing the leading C<license:> with
-C<Software::License::> and handing the rest to
+This is handled by prefixing C<Software::License::> to the path portion
+of the URL, and handing it to
 L<Module::Load::Conditional::can_load()|Module::Load::Conditional>. If
 this fails we bail out. If it succeeds a license object is instantiated
 and queried, and a reference to the result is handled by the normal file
@@ -675,21 +674,22 @@ L<Software::License|Software::License>, argument C<'method'> specifies
 the C<Software::License> method used to retrieve the license. This
 defaults to C<'license'>.
 
-B<Caveat:> the argument parsing is just a regular expression, because I
-wanted to keep non-core dependencies to a minimum. If this turns out to
-be a problem, I might look into using something like L<URI|URI> if it is
-available.
+B<Caveat:> at the moment, the URL processing is based on a home-grown
+class implementing the requisite subset of the L<URI|URI> interface.
+The URL parsing is done by the regular expression given near the end of
+the L<URI|URI> documentation.
 
 =item module:
 
-This is handled by stripping the leading C<module:> and handing the rest
-to
+This is handled by passing the path portion of the URL to
 L<Module::Load::Conditional::check_install()|Module::Load::Conditional>.
-If it can find the module, the normal file I/O mechanism is used.
+If it can find the module, the normal Perl file I/O mechanism is used.
 
 =back
 
-If a recognized scheme can not be found, the default scheme is:
+Any other scheme will result in a C<BAIL_OUT>.
+
+If no scheme is specified, it defaults to:
 
 =over
 
@@ -699,11 +699,16 @@ If a recognized scheme can not be found, the default scheme is:
 
 =item license: if the specified Software::License:: module is installed
 
-=item otherwise file:
+=item otherwise file:, for the sake of error generation.
 
 =back
 
 As a special case, C<SCALAR> references are always handled as files.
+
+=head1 SUBROUTINES
+
+This module supports the following public subroutines. All public
+subroutines are exportable, and in fact all are exported by default.
 
 =begin comment
 
