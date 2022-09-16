@@ -76,7 +76,7 @@ sub all_verbatim_ok {
     @bad_opt = grep { ! $valid_opt->{$_} } sort keys %{ $opt }
 	and $self->_bail_out( "Bad options: @bad_opt" );
     @arg
-	or @arg = grep { -d } qw{ blib t eg };
+	or @arg = grep { -d } qw{ blib/arch blib/lib blib/script t eg };
     my $rslt = 1;
     foreach my $path ( map { $self->_all_verbatim_ok_expand_topic( $opt ) } @arg ) {
 	# NOTE that the following has to be done in two steps. If I just
@@ -845,7 +845,7 @@ L<Test::Pod::Coverage|Test::Pod::Coverage> happy.
 
 This subroutine reads the files specified in its arguments, and tests
 all text files specified therein. If no arguments are specified, the
-default is C<qw{ blib eg t }>.
+default is C<qw{ blib/arch blib/lib blib/script eg t }>.
 
 The arguments may be URLs, but only schemes C<file:> and C<manifest:>
 are legal. If an argument has no scheme specified, the scheme will be
