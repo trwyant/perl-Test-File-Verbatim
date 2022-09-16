@@ -19,6 +19,7 @@ t/data/lib/Mock/Builder.pm
 t/data/lib/Mock/HTTP.pm
 t/data/text/limerick_bright.txt
 t/data/text/limerick_moebius.txt
+t/data/text/MANIFEST
 t/data/text/test_01.txt
 t/data/text/test_02.txt
 t/data/text/test_03.txt

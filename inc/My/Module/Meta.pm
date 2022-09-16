@@ -149,6 +149,7 @@ sub requires {
     return +{
 	'Carp'		=> 0,	# Perl 5.0
 	'Exporter'	=> 0,	# Perl 5.0
+	'ExtUtils::Manifest'	=> 0,	# Perl 5.1
 	'File::Find'	=> 0,	# Perl 5.0
 	'HTTP::Tiny'	=> 0,	# Perl 5.13.9
 	'List::Util'	=> 1.33,	# Perl 5.7.3

@@ -46,7 +46,7 @@ EOD
     is_deeply $TEST->__get_log(),
     [
 	[ ok => 1, 't/data/text/test_01.txt line 1 verbatim block found in t/data/text/limerick_bright.txt', [ 1 ] ],
-	[ ok => 1, 't/data/text/test_01.txt line 9 verbatim block found in t/data/text/limerick_moebius.txt', [ 1 ] ]
+	[ ok => 1, 't/data/text/test_01.txt line 9 verbatim block found in t/data/text/limerick_moebius.txt', [ 1 ] ],
     ], 't/data/text/test_01.txt: trace'
 	or diag 'Got ', explain $TEST->__get_log();
 
@@ -164,6 +164,26 @@ EOD
 	    [ ok => 1, 't/data/text/test_01.txt contains t/data/text/limerick_moebius.txt', [ 1 ] ]
 	], 'Path contains source: trace'
 	    or diag 'Got ', explain $TEST->__get_log();
+
+
+
+    $TEST->__clear();
+
+    all_verbatim_ok 't/data/text/MANIFEST';
+
+    is_deeply $TEST->__get_log(),
+    [
+	[ ok => 1, 't/data/text/test_01.txt line 1 verbatim block found in t/data/text/limerick_bright.txt', [ 1 ] ],
+	[ ok => 1, 't/data/text/test_01.txt line 9 verbatim block found in t/data/text/limerick_moebius.txt', [ 1 ] ],
+	[ ok => 1, 't/data/text/test_02.txt line 2 verbatim block found in t/data/text/limerick_bright.txt', [ 1 ] ],
+	[ ok => 1, 't/data/text/test_02.txt line 10 verbatim block found in t/data/text/limerick_moebius.txt', [ 1 ] ],
+	[ cmp_ok => 2, '==', 2, 't/data/text/test_02.txt contains expected number of verbatim blocks', [ 1 ] ],
+	[ ok => 1, 't/data/text/test_03.txt line 1 verbatim block found in Limerick', [ 1 ] ],
+	[ ok => 1, 't/data/text/test_03.txt line 11 verbatim block found in t/data/text/limerick_moebius.txt', [ 1 ] ],
+	[ skip => 't/data/text/test_04.txt is empty', [] ],
+	[ ok => 1, 't/data/text/test_05.txt line 1 verbatim block found in https://limerick.org/boat.html', [ 1 ] ],
+    ], 'all_verbatim_ok MANIFEST: trace'
+	or diag 'Got ', explain $TEST->__get_log();
 
 
     $TEST->__clear();

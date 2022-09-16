@@ -93,6 +93,20 @@ sub _all_verbatim_ok_expand_topic {
     my ( $self, $opt ) = @_;
     ref
 	and return $_;
+    my $scheme = URI_CLASS->new( $_ )->scheme() // '';
+    my $code = $self->can( "_all_verbatim_ok_expand_topic_scheme_$scheme" )
+	or $self->_bail_out_scheme_unsupported( $scheme );
+    return $code->( $self, $opt );
+}
+
+sub _all_verbatim_ok_expand_topic_scheme_ {
+    m{ (?: \A | / ) MANIFEST \z }smx
+	and goto &_all_verbatim_ok_expand_topic_scheme_manifest;
+    goto &_all_verbatim_ok_expand_topic_scheme_file;
+}
+
+sub _all_verbatim_ok_expand_topic_scheme_file {
+    my ( $self, $opt ) = @_;
     if ( -d ) {
 	my @rslt;
 	File::Find::find(
@@ -113,6 +127,17 @@ sub _all_verbatim_ok_expand_topic {
 	return @rslt;
     }
     return $_;
+}
+
+sub _all_verbatim_ok_expand_topic_scheme_manifest {
+    my ( $self ) = @_;
+    use ExtUtils::Manifest();
+    return do {
+	local $SIG{__WARN__} = sub {
+	    $self->_bail_out( $_[0] );
+	};
+	sort keys %{ ExtUtils::Manifest::maniread( $_ ) };
+    };
 }
 
 sub _all_verbatim_ok_exclude_file {
@@ -361,6 +386,11 @@ sub _bail_out_not_installed {
     return $self->_bail_out( "Module $module not installed" );
 }
 
+sub _bail_out_scheme_unsupported {
+    my ( $self, $scheme ) = @_;
+    return $self->_bail_out( "URL scheme '$scheme:' unsupported" );
+}
+
 sub _can_load {
     my ( undef, $module ) = @_;	# Invocant unused
     local $@ = undef;
@@ -438,7 +468,7 @@ sub _get_handle {
     }
 
     my $code = $self->can( "_get_handle_scheme_$scheme" )
-	or $self->_bail_out( "URL scheme '$scheme:' unsupported" );
+	or $self->_bail_out_scheme_unsupported( $scheme );
     return $code->( $self, $uri_obj );
 }
 
@@ -707,28 +737,32 @@ This module is based directly on L<Test::Builder|Test::Builder>, and
 seems to play nicely with both L<Test::More|Test::More> and
 L<Test2::V0|Test2::V0>.
 
-In general, data are specified as URLs. The following schemes are
-recognized, some of which are distinctly non-standard:
+In general, data are specified as URLs. The authority portion of the URL
+is ignored unless specifically documented otherwise. The following
+schemes are recognized, some of which are distinctly non-standard:
 
 =over
 
 =item file:
 
-This is handled by passing the path portion of the URL to the normal
-Perl file I/O machinery.
+This scheme is handled by passing the path portion of the URL to the
+normal Perl file I/O machinery. Relative paths are fine, and are
+interpreted as you would expect.
 
 =item http:
 
-This is handled by L<HTTP::Tiny|HTTP:Tiny>.
+This scheme is handled by L<HTTP::Tiny|HTTP:Tiny>. The authority portion
+of the URL is B<not> ignored.
 
 =item https:
 
-This is handled by L<HTTP::Tiny|HTTP:Tiny>, provided the requisite
-modules are installed.
+This scheme is handled by L<HTTP::Tiny|HTTP:Tiny>, provided the
+requisite modules are installed. The authority portion of the URL is
+B<not> ignored.
 
 =item license:
 
-This is handled by prefixing C<Software::License::> to the path portion
+This scheme is handled by prefixing C<Software::License::> to the path portion
 of the URL, and handing it to
 L<Module::Load::Conditional::can_load()|Module::Load::Conditional>. If
 this fails we bail out. If it succeeds a license object is instantiated
@@ -747,6 +781,13 @@ B<Caveat:> at the moment, the URL processing is based on a home-grown
 class implementing the requisite subset of the L<URI|URI> interface.
 The URL parsing is done by the regular expression given near the end of
 the L<URI|URI> documentation.
+
+=item manifest:
+
+This scheme is recognized only by L<all_verbatim_ok()|/all_verbatim_ok>.
+The specified file is read by
+L<ExtUtils::Manifest::maniread()|ExtUtils::Manifest>, and the files in
+the manifest are added to the list of files to be tested.
 
 =item module:
 
@@ -803,13 +844,19 @@ L<Test::Pod::Coverage|Test::Pod::Coverage> happy.
 =head2 all_verbatim_ok
 
 This subroutine reads the files specified in its arguments, and tests
-all text files found therein. Directories are searched recursively. If
-no arguments are specified, the default is C<qw{ blib eg t }>.
+all text files specified therein. If no arguments are specified, the
+default is C<qw{ blib eg t }>.
 
-The heavy lifting is done by L<file_verbatim_ok()|/file_verbatim_ok>.
+The arguments may be URLs, but only schemes C<file:> and C<manifest:>
+are legal. If an argument has no scheme specified, the scheme will be
+C<manifest:> if the last element of the path is C<'MANIFEST'>, or
+C<file:> otherwise.
 
-This returns a true value if all tests pass or skip, and a false value
-if any test fails.
+Each file specified is tested by
+L<file_verbatim_ok()|/file_verbatim_ok>.
+
+C<all_verbatim_ok()> returns a true value if all tests pass or skip, or
+a false value if any test fails.
 
 You can specify a hash reference as the last argument. The hash
 specifies options affecting the tests generated. These are:
