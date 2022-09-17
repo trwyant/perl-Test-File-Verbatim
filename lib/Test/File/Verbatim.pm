@@ -15,6 +15,7 @@ use utf8;
 
 # use Carp; # Don't use this, use $self->_bail_out() instead.
 use Exporter qw{ import };
+use ExtUtils::Manifest();
 use File::Find ();
 use HTTP::Tiny;
 use List::Util 1.33 ();	# for any()
@@ -78,7 +79,7 @@ sub all_verbatim_ok {
     @arg
 	or @arg = grep { -d } qw{ blib/arch blib/lib blib/script t eg };
     my $rslt = 1;
-    foreach my $path ( map { $self->_all_verbatim_ok_expand_topic( $opt ) } @arg ) {
+    foreach my $path ( map { $self->_all_verbatim_ok_expand( $opt, $_ ) } @arg ) {
 	# NOTE that the following has to be done in two steps. If I just
 	# tried $rslt &&= $self->file_verbatim_ok( $path ) no tests
 	# would be run after the first failure, because it would
@@ -89,25 +90,30 @@ sub all_verbatim_ok {
     return $rslt;
 }
 
-sub _all_verbatim_ok_expand_topic {
-    my ( $self, $opt ) = @_;
-    ref
+sub _all_verbatim_ok_expand {
+    my ( $self, $opt, $url ) = @_;
+    $DB::single = 1;
+    ref $url
 	and return $_;
-    my $scheme = URI_CLASS->new( $_ )->scheme() // '';
-    my $code = $self->can( "_all_verbatim_ok_expand_topic_scheme_$scheme" )
+    my $uri_obj = URI_CLASS->new( $url );
+    my $scheme = $uri_obj->scheme() // '';
+    my $code = $self->can( "_all_verbatim_ok_expand_scheme_$scheme" )
 	or $self->_bail_out_scheme_unsupported( $scheme );
-    return $code->( $self, $opt );
+    return $code->( $self, $opt, $uri_obj );
 }
 
-sub _all_verbatim_ok_expand_topic_scheme_ {
-    m{ (?: \A | / ) MANIFEST \z }smx
-	and goto &_all_verbatim_ok_expand_topic_scheme_manifest;
-    goto &_all_verbatim_ok_expand_topic_scheme_file;
+sub _all_verbatim_ok_expand_scheme_ {
+    my ( undef, undef, $uri_obj ) = @_;
+    $uri_obj->path() =~ m{ (?: \A | / ) MANIFEST \z }smx
+	and goto &_all_verbatim_ok_expand_scheme_manifest;
+    goto &_all_verbatim_ok_expand_scheme_file;
 }
 
-sub _all_verbatim_ok_expand_topic_scheme_file {
-    my ( $self, $opt ) = @_;
-    if ( -d ) {
+sub _all_verbatim_ok_expand_scheme_file {
+    my ( $self, $opt, $uri_obj ) = @_;
+    $self->_diagnostic_authority_ignored( $uri_obj );
+    my $path = $uri_obj->path();
+    if ( -d $path ) {
 	my @rslt;
 	File::Find::find(
 	    {
@@ -126,17 +132,17 @@ sub _all_verbatim_ok_expand_topic_scheme_file {
 	);
 	return @rslt;
     }
-    return $_;
+    return $path;
 }
 
-sub _all_verbatim_ok_expand_topic_scheme_manifest {
-    my ( $self ) = @_;
-    use ExtUtils::Manifest();
+sub _all_verbatim_ok_expand_scheme_manifest {
+    my ( $self, undef, $uri_obj ) = @_;	# $opt not used.
+    $self->_diagnostic_authority_ignored( $uri_obj );
     return do {
 	local $SIG{__WARN__} = sub {
 	    $self->_bail_out( $_[0] );
 	};
-	sort keys %{ ExtUtils::Manifest::maniread( $_ ) };
+	sort keys %{ ExtUtils::Manifest::maniread( $uri_obj->path() ) };
     };
 }
 
@@ -412,8 +418,17 @@ sub _diagnostic {
 
     @reason = $self->_adjust_reason( @reason );
 
-    return $self->_do_test( diagnostic =>
-	join '', @reason );
+    return $self->_do_test( diag => join '', @reason );
+}
+
+sub _diagnostic_authority_ignored {
+    my ( $self, $uri_obj ) = @_;
+    my $authority;
+    defined( $authority = $uri_obj->authority() )
+	and $authority ne q<>
+	and $self->_diagnostic( 'Authority portion ignored in ',
+	    $uri_obj->as_string() );
+    return;
 }
 
 # This is intended for one-off tests. The result is returned.
@@ -493,6 +508,7 @@ sub _get_handle_open {
 
 sub _get_handle_scheme_file {
     my ( $self, $uri_obj ) = @_;
+    $self->_diagnostic_authority_ignored( $uri_obj );
     return $self->_get_handle_open( $uri_obj->path() );
 }
 
@@ -524,6 +540,7 @@ sub _get_handle_scheme_http {
 
 sub _get_handle_scheme_license {
     my ( $self, $uri_obj ) = @_;
+    $self->_diagnostic_authority_ignored( $uri_obj );
     my $module = sprintf 'Software::License::%s', $uri_obj->path();
     $self->_can_load( $module )
 	or $self->_bail_out_not_installed( $module );
@@ -538,6 +555,7 @@ sub _get_handle_scheme_license {
 
 sub _get_handle_scheme_module {
     my ( $self, $uri_obj ) = @_;
+    $self->_diagnostic_authority_ignored( $uri_obj );
     my $module = $uri_obj->path();
     my $path = $self->_check_install( $module )
 	or $self->_bail_out_not_installed( $module );
@@ -548,6 +566,7 @@ sub _get_handle_scheme_module {
 
 sub _get_handle_scheme_pod {
     my ( $self, $uri_obj ) = @_;
+    $self->_diagnostic_authority_ignored( $uri_obj );
     my $module = $uri_obj->path();
     my $pp = Pod::Perldoc->new();
     my @found = eval {
