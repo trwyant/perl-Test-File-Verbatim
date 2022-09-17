@@ -1,3 +1,6 @@
+0.000_003	2022-09-17	T. R. Wyant
+    Grab-bag of test fixes.
+
 0.000_002	2022-09-16	T. R. Wyant
     Correct URL regexp to ignore double colons.
 

@@ -25,7 +25,7 @@ use Scalar::Util ();
 use Test::Builder;
 use Text::ParseWords ();
 
-our $VERSION = '0.000_002';
+our $VERSION = '0.000_003';
 
 use constant REF_ARRAY		=> ref [];
 use constant REF_HASH		=> ref {};
@@ -710,6 +710,8 @@ package Test::File::Verbatim::URI;	## no critic (Modules::ProhibitMultiplePackag
 	# The following is ALMOST the regexp given at the end of the URI
 	# POD; but I needed to disallow consecutive colons to force
 	# module names with colons to parse as path, not schema.
+	# NOTE that this means the URI module can NOT be used to parse
+	# these.
 	$uri =~ m|(?:([^:/?#]+):(?!:))?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
 	return bless \%self, $class;
     }
