@@ -708,10 +708,10 @@ package Test::File::Verbatim::URI;	## no critic (Modules::ProhibitMultiplePackag
 	my ( $class, $uri ) = @_;
 	my %self = ( as_string => $uri );
 	@self{ @parts } =
-## VERBATIM CONFIGURE trim on
-## VERBATIM BEGIN pod:URI
-	$uri =~ m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
-## VERBATIM END
+	# The following is ALMOST the regexp given at the end of the URI
+	# POD; but I needed to disallow consecutive colons to force
+	# module names with colons to parse as path, not schema.
+	$uri =~ m|(?:([^:/?#]+):(?!:))?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
 	return bless \%self, $class;
     }
 
