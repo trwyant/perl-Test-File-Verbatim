@@ -7,10 +7,11 @@ use warnings;
 
 use Errno qw{ ENOENT };
 use Test::More 0.88;	# Because of done_testing();
-use Test::File::Verbatim;
 
 use lib 'inc';
 use My::Module::Test;	# In above directory.
+
+use Test::File::Verbatim;	# Must be after My::Module::Test
 
 my $ENOENT = do {
     local $! = ENOENT;
@@ -45,7 +46,7 @@ mock_verbatim_ok file_verbatim_ok => 't/data/text/test_02.txt',
 
 mock_verbatim_ok file_verbatim_ok => 't/data/text/test_03.txt',
     [
-	[ ok => 1, 't/data/text/test_03.txt line 1 verbatim block found in Limerick', [ 1 ] ],
+	[ ok => 1, 't/data/text/test_03.txt line 1 verbatim block found in Limerick::Nantucket', [ 1 ] ],
 	[ ok => 1, 't/data/text/test_03.txt line 11 verbatim block found in t/data/text/limerick_moebius.txt', [ 1 ] ],
     ],  't/data/text/test_03.txt';
 
@@ -62,19 +63,19 @@ mock_verbatim_ok file_verbatim_ok => 't/data/text/test_05.txt',
     ],  't/data/text/test_05.txt';
 
 
-mock_verbatim_ok file_verbatim_ok => 't/data/lib/Limerick.pod',
+mock_verbatim_ok file_verbatim_ok => 't/data/lib/Limerick/Nantucket.pod',
     [
-	[ ok => 1, 't/data/lib/Limerick.pod line 27 verbatim block found in Limerick', [ 1 ] ],
-    ],  't/data/lib/Limerick.pod';
+	[ ok => 1, 't/data/lib/Limerick/Nantucket.pod line 27 verbatim block found in Limerick::Nantucket', [ 1 ] ],
+    ],  't/data/lib/Limerick/Nantucket.pod';
 
 
 mock_verbatim_ok file_verbatim_ok => \<<"EOD",
-## VERBATIM BEGIN pod:Limerick
+## VERBATIM BEGIN pod:Limerick::Nantucket
 Limerick - Grist for the Test::File::Verbatim mill
 ## VERBATIM END
 EOD
     [
-	[ ok => 1, 'SCALAR line 1 verbatim block found in pod:Limerick', [ 1 ] ],
+	[ ok => 1, 'SCALAR line 1 verbatim block found in pod:Limerick::Nantucket', [ 1 ] ],
     ],  'SCALAR pod: URL';
 
 
@@ -109,7 +110,7 @@ mock_verbatim_ok all_verbatim_ok => 't/data/text/MANIFEST',
 	[ ok => 1, 't/data/text/test_02.txt line 2 verbatim block found in t/data/text/limerick_bright.txt', [ 1 ] ],
 	[ ok => 1, 't/data/text/test_02.txt line 10 verbatim block found in t/data/text/limerick_moebius.txt', [ 1 ] ],
 	[ cmp_ok => 2, '==', 2, 't/data/text/test_02.txt contains expected number of verbatim blocks', [ 1 ] ],
-	[ ok => 1, 't/data/text/test_03.txt line 1 verbatim block found in Limerick', [ 1 ] ],
+	[ ok => 1, 't/data/text/test_03.txt line 1 verbatim block found in Limerick::Nantucket', [ 1 ] ],
 	[ ok => 1, 't/data/text/test_03.txt line 11 verbatim block found in t/data/text/limerick_moebius.txt', [ 1 ] ],
 	[ skip => 't/data/text/test_04.txt is empty', [] ],
 	[ ok => 1, 't/data/text/test_05.txt line 1 verbatim block found in https://limerick.org/boat.html', [ 1 ] ],

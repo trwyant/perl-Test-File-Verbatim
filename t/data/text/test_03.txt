@@ -1,4 +1,4 @@
-## VERBATIM BEGIN Limerick
+## VERBATIM BEGIN Limerick::Nantucket
 There was an old man from Nantucket
 Who kept all his cash in a bucket.
     But his daughter named Nan

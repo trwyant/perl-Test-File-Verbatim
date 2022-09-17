@@ -6,14 +6,13 @@ use strict;
 use warnings;
 
 use Exporter qw{ import };
-use Test::File::Verbatim;
+use Test::File::Verbatim ();
 
 our $VERSION = '0.000_002';
 
-our @EXPORT = qw{ mock_verbatim_ok throws_verbatim_ok };
+my @extra_exports = qw{ mock_verbatim_ok throws_verbatim_ok };
 
-*mock_verbatim_ok = \&Test::File::Verbatim::mock_verbatim_ok;
-*throws_verbatim_ok = \&Test::File::Verbatim::throws_verbatim_ok;
+push @Test::File::Verbatim::EXPORT, @extra_exports;
 
 # This dodge is so that Test::File::Verbatim reports errors against the
 # correct statck level.
@@ -41,8 +40,9 @@ use Mock::HTTP;		# Ditto
 
 	my $code = __PACKAGE__->can( $method )
 	    or do {
-	    local $Test::Builder::level = $Test::Builder::Level + 2;
-	    BAIL_OUT( "sub $method not found" );
+	    local $Test::Builder::Level = $Test::Builder::Level + 1;
+	    my ( undef, $file, $line ) = caller;
+	    BAIL_OUT( "sub $method not found at $file line $line" );
 	};
 
 	local *Test::File::Verbatim::__get_test_builder = sub {
@@ -58,7 +58,7 @@ use Mock::HTTP;		# Ditto
 
 	$code->( @mock_arg );
 
-	local $Test::Builder::level = $Test::Builder::Level + 1;
+	local $Test::Builder::Level = $Test::Builder::Level + 1;
 
 	my $rslt = is_deeply $TEST->__get_log(), $want, "$name: trace";
 
@@ -76,8 +76,9 @@ use Mock::HTTP;		# Ditto
 
 	my $code = __PACKAGE__->can( $method )
 	    or do {
-	    local $Test::Builder::level = $Test::Builder::Level + 2;
-	    BAIL_OUT( "sub $method not found" );
+	    local $Test::Builder::Level = $Test::Builder::Level + 1;
+	    my ( undef, $file, $line ) = caller;
+	    BAIL_OUT( "sub $method not found at $file line $line" );
 	};
 
 	local *Test::File::Verbatim::__get_test_builder = sub {

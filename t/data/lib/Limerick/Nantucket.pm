@@ -1,4 +1,4 @@
-package Limerick;
+package Limerick::Nantucket;
 
 use 5.010;
 

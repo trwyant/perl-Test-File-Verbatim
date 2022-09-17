@@ -9,6 +9,8 @@ use Carp;
 
 our $VERSION = '0.000_002';
 
+our @CARP_NOT = qw{ Test::File::Verbatim };
+
 sub new {
     my ( $class ) = @_;
     return bless {

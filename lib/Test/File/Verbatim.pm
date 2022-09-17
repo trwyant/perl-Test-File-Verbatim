@@ -92,7 +92,6 @@ sub all_verbatim_ok {
 
 sub _all_verbatim_ok_expand {
     my ( $self, $opt, $url ) = @_;
-    $DB::single = 1;
     ref $url
 	and return $_;
     my $uri_obj = URI_CLASS->new( $url );
