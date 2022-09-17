@@ -8,7 +8,7 @@ use warnings;
 use Exporter qw{ import };
 use Test::File::Verbatim;
 
-our $VERSION = '0.000_001';
+our $VERSION = '0.000_002';
 
 our @EXPORT = qw{ mock_verbatim_ok throws_verbatim_ok };
 

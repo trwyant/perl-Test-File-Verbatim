@@ -25,7 +25,7 @@ use Scalar::Util ();
 use Test::Builder;
 use Text::ParseWords ();
 
-our $VERSION = '0.000_001';
+our $VERSION = '0.000_002';
 
 use constant REF_ARRAY		=> ref [];
 use constant REF_HASH		=> ref {};

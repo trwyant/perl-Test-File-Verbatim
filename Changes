@@ -1,2 +1,5 @@
+0.000_002	2022-09-16	T. R. Wyant
+    Correct URL regexp to ignore double colons.
+
 0.000_001		2022-09-16	T. R. Wyant
     Initial kit (unpublished).

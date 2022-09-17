@@ -7,7 +7,7 @@ use warnings;
 
 use Carp;
 
-our $VERSION = '0.000_001';
+our $VERSION = '0.000_002';
 
 sub limerick {
     return <<'EOD';
