@@ -2,6 +2,8 @@ Build.PL
 Changes
 CONTRIBUTING
 eg/test-verbatim
+eg/verbatim-Test-More.t
+eg/verbatim-Test2-V0.t
 inc/My/Module/Build.pm
 inc/My/Module/Meta.pm
 inc/My/Module/Test.pm
