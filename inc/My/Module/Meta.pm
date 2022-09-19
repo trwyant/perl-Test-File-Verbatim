@@ -66,16 +66,16 @@ sub meta_merge {
 	dynamic_config	=> 1,
 	resources	=> {
 	    bugtracker	=> {
-#		web	=> 'https://rt.cpan.org/Public/Dist/Display.html?Name=Test-File-Verbatim',
-#		# web	=> 'https://github.com/trwyant/perl-Test-File-Verbatim/issues',
+		# web	=> 'https://rt.cpan.org/Public/Dist/Display.html?Name=Test-File-Verbatim',
+		web	=> 'https://github.com/trwyant/perl-Test-File-Verbatim/issues',
 		mailto  => 'wyant@cpan.org',
 	    },
 	    license	=> 'http://dev.perl.org/licenses/',
-#	    repository	=> {
-#		type	=> 'git',
-#		url	=> 'git://github.com/trwyant/perl-Test-File-Verbatim.git',
-#		web	=> 'https://github.com/trwyant/perl-Test-File-Verbatim',
-#	    },
+	    repository	=> {
+		type	=> 'git',
+		url	=> 'git://github.com/trwyant/perl-Test-File-Verbatim.git',
+		web	=> 'https://github.com/trwyant/perl-Test-File-Verbatim',
+	    },
 	},
 	@extra,
     };
