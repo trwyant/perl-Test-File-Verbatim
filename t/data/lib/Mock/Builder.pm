@@ -7,7 +7,7 @@ use warnings;
 
 use Carp;
 
-our $VERSION = '0.000_003';
+our $VERSION = '0.000_004';
 
 our @CARP_NOT = qw{ Test::File::Verbatim };
 
