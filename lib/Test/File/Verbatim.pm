@@ -147,6 +147,8 @@ sub _all_verbatim_ok_expand_scheme_manifest {
 
 sub _all_verbatim_ok_exclude_file {
     my ( $self, $exclude ) = @_;
+    defined $exclude
+	or return;
     my $ref = ref $exclude;
     my $code = $self->can( "_all_verbatim_ok_exclude_file_$ref" )
 	or $self->_bail_out( "Unsupported $ref ref in exclude" );
