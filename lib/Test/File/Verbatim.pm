@@ -799,10 +799,9 @@ L<Software::License|Software::License>, argument C<'method'> specifies
 the C<Software::License> method used to retrieve the license. This
 defaults to C<'license'>.
 
-B<Caveat:> at the moment, the URL processing is based on a home-grown
-class implementing the requisite subset of the L<URI|URI> interface.
-The URL parsing is done by the regular expression given near the end of
-the L<URI|URI> documentation.
+B<Note> that L<Software::License|Software::License> is B<not> a
+prerequisite for this module. If you wish to use the C<license:>
+functionality you will need to install it separately.
 
 =item manifest:
 
@@ -845,6 +844,11 @@ If no scheme is specified, it defaults to:
 As a special case, C<SCALAR> references are always handled as files.
 
 With the exception of configurations, any data read are cached.
+
+B<Caveat:> at the moment, the URL processing is based on a home-grown
+class implementing the requisite subset of the L<URI|URI> interface.
+The URL parsing is done by the regular expression given near the end of
+the L<URI|URI> documentation.
 
 =head1 SUBROUTINES
 

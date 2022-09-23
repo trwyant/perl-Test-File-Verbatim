@@ -93,6 +93,10 @@ sub no_index {
     };
 }
 
+sub optional_modules {
+    return ( qw{ Software::License } );
+}
+
 sub provides {
     my $provides;
     local $@ = undef;
@@ -286,6 +290,10 @@ on.
 
 This method returns the names of things which are not to be indexed
 by CPAN.
+
+=head2 optional_modules
+
+This method returns the names of all optional modules.
 
 =head2 provides
 

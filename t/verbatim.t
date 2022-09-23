@@ -6,12 +6,27 @@ use strict;
 use warnings;
 
 use Errno qw{ ENOENT };
+use Module::Load::Conditional qw{ can_load };
 use Test::More 0.88;	# Because of done_testing();
 
 use lib 'inc';
 use My::Module::Test;	# In above directory.
 
 use Test::File::Verbatim;	# Must be after My::Module::Test
+
+# NOTE that the following uses Module::Load::Conditional::can_load()
+# because that hides the module from xt/author/prereq.t, and because it
+# is already a prerequisite. It has to be inside an eval() because
+# Test::Without::Module throws an exception if it blocks a module.
+use constant HAVE_SOFTWARE_LICENSE	=> do {
+    local $@ = undef;
+    eval {
+	can_load( modules => {
+		'Software::License'	=> 0,
+	    }
+	);
+    } || 0;
+};
 
 my $ENOENT = do {
     local $! = ENOENT;
@@ -89,11 +104,15 @@ mock_verbatim_ok files_are_identical_ok =>
     ], 'Identical files';
 
 
-mock_verbatim_ok files_are_identical_ok => \$LICENSE_NONE, 'license:None',
-    [
-	[ is_eq => $LICENSE_NONE, $LICENSE_NONE,
-	    'SCALAR is identical to license:None', [ 1 ] ]
-    ], 'license:None';
+SKIP: {
+    HAVE_SOFTWARE_LICENSE
+	or skip 'Software::Licanse not available', 1;
+    mock_verbatim_ok files_are_identical_ok => \$LICENSE_NONE, 'license:None',
+	[
+	    [ is_eq => $LICENSE_NONE, $LICENSE_NONE,
+		'SCALAR is identical to license:None', [ 1 ] ]
+	], 'license:None';
+}
 
 
 mock_verbatim_ok file_contains_ok =>

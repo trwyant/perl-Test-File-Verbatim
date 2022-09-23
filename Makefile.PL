@@ -63,26 +63,45 @@ if ( $mmv >= 6.52 ) {
 WriteMakefile( %args );
 
 sub MY::postamble {
-#   my ( $self, @args ) = @_;
-    my ( $self ) = @_;
+    my ( $self, @args ) = @_;
 
-    my $authortest = $self->test_via_harness(
-	'$(FULLPERLRUN)', '$(AUTHORTEST_FILES)' );
-    $authortest =~ s/ \s+ \z //smx;
-    $authortest =~ s/ \A \s+ //smx;
-    chomp $authortest;
+    my $test = $self->test_via_harness(
+	'$(FULLPERLRUN)', '$(TEST_FILES)' );
+    my $structural_test = $self->test_via_harness(
+	'$(FULLPERLRUN)', '$(STRUCTURAL_TEST_FILES)' );
+    foreach ( $test, $structural_test ) {
+	s/ \s+ \z //smx;
+	s/ \A \s+ //smx;
+    }
+    my $optionals = join ',', My::Module::Meta->optional_modules();
 
     return <<"EOD";
 
-AUTHORTEST_FILES = t/*.t xt/author/*.t
+STRUCTURAL_TEST_FILES = xt/author/*.t
 
-authortest :: pure_all
-	AUTHOR_TESTING=1 $authortest
+functional_test :: pure_all
+	\$(NOECHO) \$(ECHO)
+	\$(NOECHO) \$(ECHO) functional_test
+	AUTHOR_TESTING=1 $test
+
+optionals_test :: pure_all
+	\$(NOECHO) \$(ECHO)
+	\$(NOECHO) \$(ECHO) optionals_test
+	AUTHOR_TESTING=1 PERL5OPT=-MTest::Without::Module=$optionals $test
+
+structural_test :: pure_all
+	\$(NOECHO) \$(ECHO)
+	\$(NOECHO) \$(ECHO) structural_test
+	AUTHOR_TESTING=1 $structural_test
+
+authortest :: functional_test optionals_test structural_test
 
 testcover :: pure_all
-	cover -test
-EOD
+	cover -test -ignore_re=inc/ -ignore_re=eg/
 
+.PHONY: functional_test optionals_test structural_test authortest testcover
+
+EOD
 }
 
 # ex: set textwidth=72 :
