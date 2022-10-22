@@ -1,3 +1,8 @@
+0.000_006	2022-10-22	T. R. Wyant
+    Add fatpack configuration, both per-file and global.
+
+    Redo configuration so that it actually works as intended.
+
 0.000_005	2022-09-23	T. R. Wyant
     Make Software::License optional.  This means skipping tests if it is
     not found, and ensuring that the relevant test files work both with
