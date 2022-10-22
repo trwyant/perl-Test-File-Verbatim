@@ -162,6 +162,7 @@ sub requires {
 	'Test::Builder'	=> 0,	# Perl 5.6.2
 	'Text::ParseWords'	=> 0,	# Perl 5.0
 	'Pod::Perldoc'	=> 0,	# Perl 5.8.1
+	'Storable'	=> 0,	# Perl 5.7.3
 	constant	=> 0,	# Perl 5.4
 	strict		=> 0,	# Perl 5.0
 	utf8		=> 0,	# Perl 5.6.0

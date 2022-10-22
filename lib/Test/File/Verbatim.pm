@@ -22,6 +22,7 @@ use List::Util 1.33 ();	# for any()
 use Module::Load::Conditional ();
 use Pod::Perldoc;
 use Scalar::Util ();
+use Storable ();
 use Test::Builder;
 use Text::ParseWords ();
 
@@ -52,9 +53,12 @@ our %EXPORT_TAGS = (
     sub new {
 	my ( $class ) = @_;
 	return ( $test = bless {
-		cache			=> {},
-		default_encoding	=> '',
-		trim			=> 0,
+		cache	=> {},
+		config	=> {
+		    default_encoding	=> '',
+		    default_fatpack	=> 0,
+		    trim		=> 0,
+		},
 	    }, $class );
     }
 
@@ -183,15 +187,17 @@ sub _all_verbatim_ok_exclude_file_Regexp {
 
 sub configure_file_verbatim {
     my ( $self, @argv ) = _get_args( @_ );
+    $self->_init_context();
+    my $config = $self->{config};
     foreach my $path ( @argv ) {
 	if ( REF_ARRAY eq ref $path ) {
-	    $self->_configure_parsed( @{ $path } );
+	    $self->_configure_parsed( $config, @{ $path } );
 	} else {
 	    local $self->{cache} = $self->{cache};
 	    my $fh = $self->_get_handle( $path );
 	    while ( <$fh> ) {
 		s/ \r $ //smx;
-		$self->_configure_line( $_ );
+		$self->_configure_line( $config, $_ );
 	    }
 	    close $fh;
 	}
@@ -200,25 +206,24 @@ sub configure_file_verbatim {
 }
 
 sub _configure_line {
-    my ( $self, $line ) = @_;
+    my ( $self, $config, $line ) = @_;
     s/ \A \s+ //smx;
     $line ne ''
 	and index $line, '#'
 	or return;
     $line =~ s/ \s+ \z //smx;
-    $self->_configure_parsed( Text::ParseWords::shellwords( $line ) );
+    $self->_configure_parsed( $config, Text::ParseWords::shellwords( $line ) );
     return;
 }
 
 sub _configure_parsed {
-    my ( $self, @argv ) = @_;
+    my ( $self, $config, @argv ) = @_;
     @argv
 	or return;
     my $verb = shift @argv;
     my $code = $self->can( "_configure_verb_\L$verb" )
 	or $self->_bail_out( "Configuration item $verb unknown" );
-    my $context = $self->{context} || $self;
-    $code->( $self, $context, @argv );
+    $code->( $self, $config, @argv );
     return;
 }
 
@@ -268,7 +273,7 @@ sub _configure_interpret_boolean {
 sub file_contains_ok {
     my ( $self, $path, $source ) = _get_args( @_ );
 
-    delete local $self->{context};
+    $self->_init_context();
 
     return $self->_do_test( ok	=>
 	index(
@@ -286,8 +291,8 @@ sub _file_mode {
     my ( $self, $path ) = @_;
     my $encoding;
     defined $path
-	and $encoding = $self->{file_encoding}{$path};
-    $encoding //= $self->{default_encoding};
+	and $encoding = $self->{context}{file_encoding}{$path};
+    $encoding //= $self->{context}{default_encoding};
     return $encoding eq '' ? '<' : "<:encoding($encoding)";
 }
 
@@ -302,7 +307,7 @@ sub file_verbatim_ok {
     my $TEST = __get_test_builder();
     local $Test::Builder::Level = _nest_depth();
 
-    delete local $self->{context};
+    $self->_init_context();
 
     my $fh = $self->_get_handle( $path );
 
@@ -312,8 +317,11 @@ sub file_verbatim_ok {
     -z _
 	and return $TEST->skip( "$path is empty" );
 
-    -B _
-	and return $TEST->skip( "$path is binary" );
+    {
+	no warnings qw{ utf8 };	## no critic (ProhibitNoWarnings)
+	-B _
+	    and return $TEST->skip( "$path is binary" );
+    }
 
     my $context = $self->{context};
 
@@ -357,7 +365,7 @@ sub file_verbatim_ok {
 sub files_are_identical_ok {
     my ( $self, $path, $source ) = _get_args( @_ );
 
-    delete local $self->{context};
+    $self->_init_context();
 
     return $self->_do_test( is_eq =>
 	$self->_slurp_url( $path ),
@@ -446,6 +454,18 @@ sub _do_test {
     return $TEST->$test( @argv );
 }
 
+# For testing only. May be changed or revoked at any time. CAVEAT CODER!
+sub __get_config {
+    my ( $self ) = _get_args( @_ );
+    return $self->{config};
+}
+
+# For testing only. May be changed or revoked at any time. CAVEAT CODER!
+sub __get_context {
+    my ( $self ) = _get_args( @_ );
+    return $self->{context};
+}
+
 # This gets used so that we can hot-patch in a mock class for testing
 # purposes.
 sub __get_http_tiny {
@@ -455,8 +475,6 @@ sub __get_http_tiny {
 
 sub _get_handle {
     my ( $self, $url ) = @_;
-
-    $self->_init_context();
 
     if ( ref $url ) {
 	$self->{context}{file_name} //= ref $url;
@@ -589,10 +607,8 @@ sub __get_test_builder {
 
 sub _init_context {
     my ( $self ) = @_;
-    $self->{context} ||= {
-	trim	=> 0,
-    };
-    return $self->{context};
+    $self->{context} = Storable::dclone( $self->{config} );
+    return;
 }
 
 sub _nest_depth {
@@ -625,7 +641,7 @@ sub _read_verbatim_section {
 # t/verbatim.t, and so needs the argument processing.
 sub __slurp {
     my ( $self, $url ) = _get_args( @_ );
-    delete local $self->{context};
+    $self->_init_context();
     return $self->_slurp_url( $url );
 }
 
@@ -640,7 +656,7 @@ sub _slurp_url {
 	$text;
     };
 
-    my $context = $self->_init_context();
+    my $context = $self->{context};
 
     if ( $context->{trim} ) {
 	$cache->[$context->{trim}] ||= _trim_text( $cache->[0] );
@@ -673,8 +689,9 @@ sub _verbatim_BEGIN {
 sub _verbatim_CONFIGURE {
     my ( $self, $arg ) = @_;
     $arg //= '';
+    my $context = $self->{context};
     if ( $arg =~ m/ \S /smx ) {
-	$self->_configure_line( $arg );
+	$self->_configure_line( $context, $arg );
     } else {
 	my $context = $self->{context};
 	my $fh = $context->{file_handle};
@@ -684,7 +701,7 @@ sub _verbatim_CONFIGURE {
 	    $_ eq $end_marker
 		and return 1;
 	    $context->{line} = $.;
-	    $self->_configure_line( $_ );
+	    $self->_configure_line( $context, $_ );
 	}
 	$self->{context}{line} = $configure_line;
 	$self->_bail_out( 'CONFIGURE not terminated' );

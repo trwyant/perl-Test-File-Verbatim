@@ -216,58 +216,29 @@ flush
 encoding utf-8
 EOD
 
+is_deeply Test::File::Verbatim::__get_config(), {
+    default_encoding	=> 'utf-8',
+    default_fatpack	=> 0,
+    trim		=> 0,
+}, 'Configuration';
+
 all_verbatim_ok map { sprintf 't/data/text/test_%02d.txt', $_ } 1 .. 4;
+
+{
+    my $context = Test::File::Verbatim::__get_context();
+    # Do not try this at home, boys and girls.
+    delete $context->{file_handle};
+    is_deeply Test::File::Verbatim::__get_context(), {
+	default_encoding	=> 'utf-8',
+	default_fatpack	=> 0,
+	file_encoding	=> {},
+	file_name	=> 't/data/text/test_04.txt',
+	trim		=> 0,
+    }, 'Leftover context';
+}
 
 done_testing;
 
 1;
-
-=begin comment
-
-package Test::File::Verbatim;
-
-use Test::More 0.88;	# Because of done_testing();
-
-{
-    my $TEST;
-
-    BEGIN {
-	$TEST = Mock::Builder->new();
-    }
-
-    sub mock_verbatim_ok {
-	my ( $method, @mock_arg ) = @_;
-	my $code = __PACKAGE__->can( $method )
-	    or BAIL_OUT( "sub $method not found" );
-
-	my ( $want, $name ) = splice @mock_arg, -2, 2;
-
-	local *Test::File::Verbatim::__get_test_builder = sub {
-	    return $TEST;
-	};
-
-	local *Test::File::Verbatim::__get_http_tiny = sub {
-	    state $UA = Mock::HTTP->new();
-	    return $UA;
-	};
-
-	$TEST->__clear();
-
-	$code->( @mock_arg );
-
-	local $Test::Builder::level = $Test::Builder::Level + 1;
-
-	my $rslt = is_deeply $TEST->__get_log(), $want, $name;
-
-	$rslt or diag 'Got ', explain $TEST->__get_log();
-
-	return $rslt;
-    }
-
-}
-
-=end comment
-
-=cut
 
 # ex: set textwidth=72 :
