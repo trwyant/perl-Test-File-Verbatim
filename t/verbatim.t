@@ -237,6 +237,48 @@ all_verbatim_ok map { sprintf 't/data/text/test_%02d.txt', $_ } 1 .. 4;
     }, 'Leftover context';
 }
 
+configure_file_verbatim \<<'EOD';
+flush
+encoding
+fatpack on STRING
+EOD
+
+is_deeply Test::File::Verbatim::__get_config(), {
+    default_encoding	=> '',
+    default_fatpack	=> 0,
+    file_fatpack	=> {
+	STRING	=> 1,
+    },
+    trim		=> 0,
+}, 'Configuration';
+
+file_verbatim_ok \<<'EOD';
+  ## VERBATIM EXPECT 1
+  ## VERBATIM BEGIN t/data/text/limerick/bright.txt
+  There was a young lady named Bright
+  Who could travel much faster than light.
+      She set out one day
+      In a relative way
+  And returned the previous night.
+  ## VERBATIM END
+EOD
+
+{
+    my $context = Test::File::Verbatim::__get_context();
+    # Do not try this at home, boys and girls.
+    delete $context->{file_handle};
+    is_deeply Test::File::Verbatim::__get_context(), {
+	default_encoding	=> '',
+	default_fatpack	=> 0,
+	file_encoding	=> {},
+	file_fatpack	=> {
+	    STRING	=> 1,
+	},
+	file_name	=> 'SCALAR',
+	trim		=> 0,
+    }, 'Leftover context';
+}
+
 done_testing;
 
 1;

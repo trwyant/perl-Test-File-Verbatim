@@ -194,9 +194,12 @@ sub configure_file_verbatim {
 	    $self->_configure_parsed( $config, @{ $path } );
 	} else {
 	    local $self->{cache} = $self->{cache};
+	    my $fatpack = $self->_get_fatpack( $path );
 	    my $fh = $self->_get_handle( $path );
 	    while ( <$fh> ) {
 		s/ \r $ //smx;
+		$fatpack
+		    and s/ \A \N{U+0020}{2} //smx;
 		$self->_configure_line( $config, $_ );
 	    }
 	    close $fh;
@@ -241,6 +244,24 @@ sub _configure_verb_encoding {
 	}
     } else {
 	$context->{default_encoding} = $encoding;
+    }
+    return;
+}
+
+sub _configure_verb_fatpack {
+    my ( $self, $context, $fatpack, $path ) = @_;
+    $fatpack = _configure_interpret_boolean( $fatpack );
+    if ( defined $path ) {
+	if ( not $context->{file_fatpack}{$path} xor $fatpack ) {
+	    # If the Boolean value did not change, ignore it.
+	} elsif ( $self->{cache}{$path} ) {
+	    $self->_diagnostic(
+		"Fatpack setting ignored; $path already read" );
+	} else {
+	    $context->{file_fatpack}{$path} = $fatpack;
+	}
+    } else {
+	$context->{default_fatpack} = $fatpack;
     }
     return;
 }
@@ -324,8 +345,11 @@ sub file_verbatim_ok {
     }
 
     my $context = $self->{context};
+    my $fatpack = $self->_get_fatpack( $path );
 
     while ( <$fh> ) {
+	$fatpack
+	    and s/ \A \N{U+0020}{2} //smx;
 	m/ \A ( ( \#\# | =for ) [ ] VERBATIM ) \b/smx
 	    or next;
 	s/ \r $ //smx;
@@ -472,6 +496,19 @@ sub __get_http_tiny {
     state $UA = HTTP::Tiny->new();
     return $UA;
 }
+
+sub _get_fatpack {
+    my ( $self, $path ) = @_;
+    my $config = $self->{context} || $self->{config};
+    my $fatpack;
+    if ( defined $path ) {
+	my $name = ref $path || $path;
+	$fatpack = $config->{file_fatpack}{$name};
+    }
+    $fatpack //= $config->{default_fatpack};
+    return $fatpack;
+}
+
 
 sub _get_handle {
     my ( $self, $url ) = @_;
@@ -649,10 +686,14 @@ sub _slurp_url {
     my ( $self, $url ) = _get_args( @_ );
 
     my $cache = $self->{cache}{$url} ||= [];
+    my $fatpack = $self->_get_fatpack( $url );
+
     $cache->[0] ||= do {
 	my $fh = $self->_get_handle( $url );
 	local $/ = undef;
 	( my $text = <$fh> ) =~ s/ \r $ //smxg;
+	$fatpack
+	    and $text =~ s/ ^ \N{U+0020}{2} //smxg;
 	$text;
     };
 
@@ -1078,6 +1119,34 @@ These are decoded using the information in the C<Content-Type> header,
 if any.
 
 The default is C<''>.
+
+=item fatpack
+
+This specifies whether files are fat packed. Fat packed files have the
+leading two spaces (if present) removed from each line. This
+configuration item takes either one or two arguments.
+
+The first argument is normally interpreted as a Perl Boolean, but
+case-insensitive strings C<'no'>, C<'off'>, and C<'false'> have been
+special-cased to yield false values.
+
+If a second argument is specified (and the author strongly recommends
+this) it is the name of the file which is fat packed.  File names are
+matched by case-sensitive string comparison, so (for example)
+
+ fatpack yes foo/bar
+
+will not be applied to F<./foo/bar>.
+
+If a second argument is not specified, it specifies the setting for all
+files not specified explicitly.
+
+Files are read with the setting valid at the time they are read.
+Subsequent changes will not affect them. An attempt to change the
+file-specific encoding of a file that has already been read will be
+ignored with a diagnostic.
+
+The default is C<0> (i.e. false).
 
 =item flush
 
