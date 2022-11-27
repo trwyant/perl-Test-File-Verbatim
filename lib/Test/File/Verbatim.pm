@@ -19,7 +19,6 @@ use ExtUtils::Manifest();
 use File::Find ();
 use File::Spec ();
 use HTTP::Tiny;
-use List::Util 1.33 ();	# for any()
 use Module::Load::Conditional ();
 use Pod::Perldoc;
 use Scalar::Util ();
@@ -87,12 +86,8 @@ sub all_verbatim_ok {
 	or $opt->{exclude} = \&__ignore_file;
     my $rslt = 1;
     foreach my $path ( map { $self->_all_verbatim_ok_expand( $opt, $_ ) } @arg ) {
-	# NOTE that the following has to be done in two steps. If I just
-	# tried $rslt &&= $self->file_verbatim_ok( $path ) no tests
-	# would be run after the first failure, because it would
-	# shortcut.
-	my $ok = $self->file_verbatim_ok( $path );
-	$rslt &&= $ok;
+	$self->file_verbatim_ok( $path )
+	    or $rslt = 0;
     }
     return $rslt;
 }
@@ -124,12 +119,16 @@ sub _all_verbatim_ok_expand_scheme_file {
 	File::Find::find(
 	    {
 		wanted	=> sub {
-		    -d
-			and return;
-		    $self->_all_verbatim_ok_exclude_file( $opt->{exclude} )
-			and return $self->_do_test(
-			skip => "$_ excluded from testing" );
-		    push @rslt, $_;
+		    my $is_dir = -d;
+		    if ( $self->_all_verbatim_ok_exclude_file(
+			    $opt->{exclude} ) ) {
+			$is_dir
+			    and $File::Find::prune = 1;
+			return $self->_do_test(
+			    skip => "$_ excluded from testing" );
+		    }
+		    $is_dir
+			or push @rslt, $_;
 		    return;
 		},
 		no_chdir	=> 1,
@@ -169,8 +168,12 @@ sub _all_verbatim_ok_exclude_file_ {
 
 sub _all_verbatim_ok_exclude_file_ARRAY {
     my ( $self, $exclude ) = @_;
-    return List::Util::any { $self->_all_verbatim_ok_exclude_file( $_ ) }
-    @{ $exclude };
+    # We can't use List::Util::any(), because it stomps on $_.
+    foreach my $test ( @{ $exclude } ) {
+	$self->_all_verbatim_ok_exclude_file( $test )
+	    and return 1;
+    }
+    return 0;
 }
 
 sub _all_verbatim_ok_exclude_file_CODE {
@@ -976,7 +979,7 @@ directory. Possible values are:
 
 =item * A scalar
 
-The file with the given name is excluded.
+The file with the given path is excluded.
 
 =item * An ARRAY reference
 
@@ -986,7 +989,8 @@ the array.
 =item * A CODE reference
 
 The code will be called with the path to the file in the topic variable
-(C<$_>). It will be excluded if the code returns a true value.
+(C<$_>), and special handle C<_> containing the C<stat()> structure for
+the file. The file will be excluded if the code returns a true value.
 
 =item * A HASH reference
 

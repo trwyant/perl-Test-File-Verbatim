@@ -199,9 +199,27 @@ file_verbatim_ok 't/data/text/test_04.txt';
 
 file_verbatim_ok 't/data/text/test_05.txt';
 
+note <<'EOD';
+
+all_verbatim_ok() on files t/data/text/test_{1,2,3,4}.txt
+
+EOD
+
 all_verbatim_ok map { sprintf 't/data/text/test_%02d.txt', $_ } 1 .. 4;
 
-all_verbatim_ok { exclude => [ qr| \A t/data/ |smx ] };
+note <<'EOD';
+
+all_verbatim_ok() excluding qr|t/data|
+
+EOD
+
+all_verbatim_ok { exclude => [ qr| \A t/data |smx ] };
+
+note <<'EOD';
+
+File is identical to itself
+
+EOD
 
 files_are_identical_ok 't/data/text/test_01.txt', 't/data/text/test_01.txt';
 
