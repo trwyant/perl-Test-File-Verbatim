@@ -29,6 +29,7 @@ t/data/text/test_03.txt
 t/data/text/test_04.txt
 t/data/text/test_05.txt
 t/verbatim.t
+tools/extract-ack-ignore
 xt/author/changes.t
 xt/author/critic.t
 xt/author/executable.t
