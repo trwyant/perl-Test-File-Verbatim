@@ -396,7 +396,9 @@ sub test_details {
     my $inx = 0;
     while ( $inx < @want ) {
 	if ( $want[$inx] eq '' ) {
-	    ok $detail[$inx]{type} eq '' && $detail[$inx]{ok},
+	    cmp_ok $detail[$inx]{type}, 'eq', $want[$inx],
+		"Test $num was a normal test";
+	    ok $detail[$inx]{ok},
 		"Test $num was a pass";
 	} else {
 	    is $detail[$inx]{type}, $want[$inx],
