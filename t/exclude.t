@@ -9,7 +9,7 @@ use Test::More 0.88;	# Because of done_testing();
 use Test::File::Verbatim;
 
 BEGIN {
-    *excl = \&Test::File::Verbatim::__exclude;
+    *excl = \&default_exclude;	# Convenience abbreviation.
 }
 
 note <<'EOD';
