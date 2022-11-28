@@ -43,6 +43,8 @@ Test using mock object, to ensure right steps are triggered
 
 EOD
 
+my $TEST = Test::More->builder();	# Test::Builder object
+
 
 mock_verbatim_ok file_verbatim_ok => 't/data/text/test_01.txt',
     [
@@ -189,31 +191,73 @@ Run passing tests for real, just to be sure they pass.
 
 EOD
 
-file_verbatim_ok 't/data/text/test_01.txt';
+{
+    my $first_test = $TEST->current_test();
 
-file_verbatim_ok 't/data/text/test_02.txt';
+    file_verbatim_ok 't/data/text/test_01.txt';
 
-file_verbatim_ok 't/data/text/test_03.txt';
+    test_details( $first_test, ( '' ) x 2 );
+}
 
-file_verbatim_ok 't/data/text/test_04.txt';
+{
+    my $first_test = $TEST->current_test();
 
-file_verbatim_ok 't/data/text/test_05.txt';
+    file_verbatim_ok 't/data/text/test_02.txt';
+
+    test_details( $first_test, ( '' ) x 3 );
+}
+
+{
+    my $first_test = $TEST->current_test();
+
+    file_verbatim_ok 't/data/text/test_03.txt';
+
+    test_details( $first_test, ( '' ) x 2 );
+}
+
+{
+    my $first_test = $TEST->current_test();
+
+    file_verbatim_ok 't/data/text/test_04.txt';
+
+    test_details( $first_test, 'skip' );
+}
+
+{
+    my $first_test = $TEST->current_test();
+
+    file_verbatim_ok 't/data/text/test_05.txt';
+
+    test_details( $first_test, '' );
+}
 
 note <<'EOD';
 
-all_verbatim_ok() on files t/data/text/test_{1,2,3,4}.txt
+all_verbatim_ok() on files t/data/text/test_0{1,2,3,4}.txt
 
 EOD
 
-all_verbatim_ok map { sprintf 't/data/text/test_%02d.txt', $_ } 1 .. 4;
+{
+    my $first_test = $TEST->current_test();
+
+    all_verbatim_ok map { sprintf 't/data/text/test_%02d.txt', $_ } 1 .. 4;
+
+    test_details( $first_test, ( '' ) x 7, 'skip' );
+}
 
 note <<'EOD';
 
-all_verbatim_ok() excluding qr|t/data|
+all_verbatim_ok() excluding qr{t/data}
 
 EOD
 
-all_verbatim_ok { exclude => [ qr| \A t/data |smx ] };
+{
+    my $first_test = $TEST->current_test();
+
+    all_verbatim_ok { exclude => [ qr{ \A t/data }smx ] };
+
+    test_details( $first_test, ( 'skip' ) x 2, '', ( 'skip' ) x 5 );
+}
 
 note <<'EOD';
 
@@ -240,7 +284,25 @@ is_deeply Test::File::Verbatim::__get_config(), {
     trim		=> 0,
 }, 'Configuration';
 
-all_verbatim_ok map { sprintf 't/data/text/test_%02d.txt', $_ } 1 .. 4;
+note <<'EOD';
+
+all_verbatim_ok() on files t/data/text/test_0{1,2,3,4}.txt, utf-8
+
+EOD
+
+{
+    my $first_test = $TEST->current_test();
+
+    all_verbatim_ok map { sprintf 't/data/text/test_%02d.txt', $_ } 1 .. 4;
+
+    test_details( $first_test, ( '' ) x 7, 'skip' );
+}
+
+note <<'EOD';
+
+Check internal state after running the above tests.
+
+EOD
 
 {
     my $context = Test::File::Verbatim::__get_context();
@@ -255,24 +317,34 @@ all_verbatim_ok map { sprintf 't/data/text/test_%02d.txt', $_ } 1 .. 4;
     }, 'Leftover context';
 }
 
+note <<'EOD';
+
+Test fatpack processing
+
+EOD
+
 configure_file_verbatim \<<'EOD';
 flush
 encoding
-fatpack on STRING
+fatpack on SCALAR
 EOD
 
 is_deeply Test::File::Verbatim::__get_config(), {
     default_encoding	=> '',
     default_fatpack	=> 0,
     file_fatpack	=> {
-	STRING	=> 1,
+	SCALAR	=> 1,
     },
     trim		=> 0,
 }, 'Configuration';
 
-file_verbatim_ok \<<'EOD';
+
+{
+    my $first_test = $TEST->current_test();
+
+    file_verbatim_ok \<<'EOD';
   ## VERBATIM EXPECT 1
-  ## VERBATIM BEGIN t/data/text/limerick/bright.txt
+  ## VERBATIM BEGIN t/data/text/limerick_bright.txt
   There was a young lady named Bright
   Who could travel much faster than light.
       She set out one day
@@ -281,23 +353,60 @@ file_verbatim_ok \<<'EOD';
   ## VERBATIM END
 EOD
 
+    test_details( $first_test, '' );
+}
+
+note <<'EOD';
+
+Check internal state after running the above tests.
+
+EOD
+
 {
     my $context = Test::File::Verbatim::__get_context();
     # Do not try this at home, boys and girls.
     delete $context->{file_handle};
     is_deeply Test::File::Verbatim::__get_context(), {
+	count		=> 1,
 	default_encoding	=> '',
 	default_fatpack	=> 0,
+	expect		=> 1,
 	file_encoding	=> {},
 	file_fatpack	=> {
-	    STRING	=> 1,
+	    SCALAR	=> 1,
 	},
 	file_name	=> 'SCALAR',
+	leader		=> '##',
+	line		=> 2,
 	trim		=> 0,
+	verbatim	=> '## VERBATIM',
     }, 'Leftover context';
 }
 
 done_testing;
+
+sub test_details {
+    my ( $num, @want ) = @_;
+    my $last = $TEST->current_test();
+    my $count = $last - $num;
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    cmp_ok $last - $num, '==', $count, "Ran $count tests";
+    my @detail = $TEST->details();
+    splice @detail, 0, $num++;
+    my $inx = 0;
+    while ( $inx < @want ) {
+	if ( $want[$inx] eq '' ) {
+	    ok $detail[$inx]{type} eq '' && $detail[$inx]{ok},
+		"Test $num was a pass";
+	} else {
+	    is $detail[$inx]{type}, $want[$inx],
+		"Test $num was a $want[$inx]";
+	}
+	$inx++;
+	$num++;
+    }
+    return;
+}
 
 1;
 

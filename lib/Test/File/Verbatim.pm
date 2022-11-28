@@ -351,7 +351,8 @@ sub file_verbatim_ok {
     }
 
     my $context = $self->{context};
-    my $fatpack = $self->_get_fatpack( $path );
+    local $context->{fatpacked_source} = my $fatpack =
+	$self->_get_fatpack( $path );
 
     while ( <$fh> ) {
 	$fatpack
@@ -685,9 +686,12 @@ sub _read_verbatim_section {
     my $content = '';
 
     my $end_marker = "$context->{verbatim} END\n";
+    my $fatpack = $context->{fatpacked_source};
 
     local $_ = undef;
     while ( <$fh> ) {
+	$fatpack
+	    and s/ ^ \N{U+0020}{2} //smx;
 	$_ eq $end_marker
 	    and return $context->{trim} ? _trim_text( $content ) : $content;
 	$content .= $_;
@@ -756,11 +760,13 @@ sub _verbatim_CONFIGURE {
     if ( $arg =~ m/ \S /smx ) {
 	$self->_configure_line( $context, $arg );
     } else {
-	my $context = $self->{context};
+	my $fatpack = $context->{fatpacked_source};
 	my $fh = $context->{file_handle};
 	my $end_marker = "$context->{verbatim} END\n";
 	my $configure_line = $.;
 	while ( <$fh> ) {
+	    $fatpack
+		and s/ \A \N{U+0020}{2} //smx;
 	    $_ eq $end_marker
 		and return 1;
 	    $context->{line} = $.;
