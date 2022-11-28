@@ -256,7 +256,9 @@ EOD
 
     all_verbatim_ok { exclude => [ qr{ \A t/data }smx ] };
 
-    test_details( $first_test, ( 'skip' ) x 2, '', ( 'skip' ) x 5 );
+    # Would like to do the following, but it is too sensitive to stray
+    # files (say, editor swap files).
+    # test_details( $first_test, ( 'skip' ) x 7, '' );
 }
 
 note <<'EOD';
@@ -390,7 +392,8 @@ sub test_details {
     my $last = $TEST->current_test();
     my $count = $last - $num;
     local $Test::Builder::Level = $Test::Builder::Level + 1;
-    cmp_ok $last - $num, '==', $count, "Ran $count tests";
+    cmp_ok $last - $num, '==', $count, "Ran $count tests"
+	or return;
     my @detail = $TEST->details();
     splice @detail, 0, $num++;
     my $inx = 0;
