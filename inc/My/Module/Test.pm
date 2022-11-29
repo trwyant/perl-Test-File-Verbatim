@@ -45,14 +45,31 @@ use Mock::HTTP;		# Ditto
 	    BAIL_OUT( "sub $method not found at $file line $line" );
 	};
 
-	local *Test::File::Verbatim::__get_test_builder = sub {
-	    return $TEST;
-	};
+	# NOTE I was just localizing the globs, but that caused problems
+	# under 5.10.1, so I cobbled together the My::Scope::Guard stuff
+	# to restore the old subroutines on scope exit.
 
-	local *Test::File::Verbatim::__get_http_tiny = sub {
-	    state $UA = Mock::HTTP->new();
-	    return $UA;
-	};
+	my $get_test_builder = \&Test::File::Verbatim::__get_test_builder;
+	my $get_http_tiny = \&Test::File::Verbatim::__get_http_tiny;
+
+	my $scope_guard = My::Scope::Guard->new( sub {
+		no warnings qw{ redefine };
+		*Test::File::Verbatim::__get_test_builder = $get_test_builder;
+		*Test::File::Verbatim::__get_http_tiny = $get_http_tiny;
+	    } );
+
+	{
+	    no warnings qw{ redefine };
+
+	    *Test::File::Verbatim::__get_test_builder = sub {
+		return $TEST;
+	    };
+
+	    *Test::File::Verbatim::__get_http_tiny = sub {
+		state $UA = Mock::HTTP->new();
+		return $UA;
+	    };
+	}
 
 	$TEST->__clear();
 
@@ -81,14 +98,31 @@ use Mock::HTTP;		# Ditto
 	    BAIL_OUT( "sub $method not found at $file line $line" );
 	};
 
-	local *Test::File::Verbatim::__get_test_builder = sub {
-	    return $TEST;
-	};
+	# NOTE I was just localizing the globs, but that caused problems
+	# under 5.10.1, so I cobbled together the My::Scope::Guard stuff
+	# to restore the old subroutines on scope exit.
 
-	local *Test::File::Verbatim::__get_http_tiny = sub {
-	    state $UA = Mock::HTTP->new();
-	    return $UA;
-	};
+	my $get_test_builder = \&Test::File::Verbatim::__get_test_builder;
+	my $get_http_tiny = \&Test::File::Verbatim::__get_http_tiny;
+
+	my $scope_guard = My::Scope::Guard->new( sub {
+		no warnings qw{ redefine };
+		*Test::File::Verbatim::__get_test_builder = $get_test_builder;
+		*Test::File::Verbatim::__get_http_tiny = $get_http_tiny;
+	    } );
+
+	{
+	    no warnings qw{ redefine };
+
+	    *Test::File::Verbatim::__get_test_builder = sub {
+		return $TEST;
+	    };
+
+	    *Test::File::Verbatim::__get_http_tiny = sub {
+		state $UA = Mock::HTTP->new();
+		return $UA;
+	    };
+	}
 
 	$TEST->__clear();
 
@@ -105,6 +139,17 @@ use Mock::HTTP;		# Ditto
 
 }
 
+sub My::Scope::Guard::new {
+    my ( $class, $code ) = @_;
+    ref $code eq ref sub {}
+	or confess( 'Bug - argument must be code ref' );
+    return bless $code, $class;
+}
+
+sub My::Scope::Guard::DESTROY {
+    my ( $self ) = @_;
+    $self->();
+}
 
 1;
 

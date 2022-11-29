@@ -716,7 +716,12 @@ sub _get_handle_scheme_pod {
 	open my $fh, '>', \my $text	## no critic (RequireBriefOpen)
 	    or $self->_bail_out( "Failed to open SCALAR ref: $!" );
 	local *STDERR = $fh;
-	$pp->maybe_extend_searchpath();
+	## FIXME
+	## DANGER WILL ROBINSON!!! ENCAPSULATION VIOLATION!!!
+	## DO NOT ATTEMPT THIS AT HOME!!!
+	my $code = $pp->can( 'maybe_extend_searchpath' ) || $pp->can(
+	    'maybe_diddle_INC' ) || sub {};
+	$code->( $pp );
 	$pp->grand_search_init( [ $module ] );
     } or $self->_bail_out( "POD not found for $module" );
     return $self->_get_handle_open( $found[0] );
