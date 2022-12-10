@@ -1,3 +1,23 @@
+0.000_007	2022-12-10	T. R. Wyant
+    Default all_verbatim_ok()  exclusion code
+    * Add to exclude_ack_ignore() based on ack
+    * Add exclude_manifest_skip() which works off MANIFEST.SKIP
+    * Make the default exclusion exclude_manifest_skip() if
+      MANIFEST.SKIP exists, otherwise exclude_ack_ignore.
+
+    Tweak to work under Perl 5.10.
+
+    IOU better machinery for finding POD. The current code is an horrible
+    encapsulation violation.
+
+    Add GitHub CI.
+
+    Ensure the correct tests pass in t/verbatim.t
+
+    Fix exposed problems with fatpack handling.
+
+    Make all_verbatim_ok() 'exclude' option work as intended.
+
 0.000_006	2022-10-22	T. R. Wyant
     Add fatpack configuration, both per-file and global.
 

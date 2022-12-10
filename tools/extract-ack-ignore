@@ -11,7 +11,7 @@ use List::Util 1.45 qw{ uniqstr };
 use Module::Load::Conditional qw{ check_install };
 use Pod::Usage;
 
-our $VERSION = '0.000_006';
+our $VERSION = '0.000_007';
 
 use constant CONFIG_DEFAULT	=> 'App::Ack::ConfigDefault';
 

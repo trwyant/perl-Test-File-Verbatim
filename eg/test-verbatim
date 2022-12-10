@@ -10,7 +10,7 @@ use Pod::Usage;
 use Test::More 0.88;
 use Test::File::Verbatim;
 
-our $VERSION = '0.000_006';
+our $VERSION = '0.000_007';
 
 my %opt;
 

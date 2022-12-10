@@ -25,7 +25,7 @@ use Storable ();
 use Test::Builder;
 use Text::ParseWords ();
 
-our $VERSION = '0.000_006';
+our $VERSION = '0.000_007';
 
 use constant REF_ARRAY		=> ref [];
 use constant REF_HASH		=> ref {};
