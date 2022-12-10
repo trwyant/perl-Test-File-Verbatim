@@ -20,6 +20,7 @@ t/data/lib/Limerick/Nantucket.pm
 t/data/lib/Limerick/Nantucket.pod
 t/data/lib/Mock/Builder.pm
 t/data/lib/Mock/HTTP.pm
+t/data/MANIFEST.SKIP
 t/data/text/limerick_bright.txt
 t/data/text/limerick_moebius.txt
 t/data/text/MANIFEST
