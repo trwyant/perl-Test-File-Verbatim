@@ -545,10 +545,12 @@ sub _bail_out_scheme_unsupported {
 sub _can_load {
     my ( undef, $module ) = @_;	# Invocant unused
     local $@ = undef;
-    return eval {
+    # Coded this way to satisfy older Perl::Critic versions.
+    eval {
 	Module::Load::Conditional::can_load( modules => { $module => 0 } );
 	1;
-    };
+    } or return 0;
+    return 1;
 }
 
 sub _check_install {
