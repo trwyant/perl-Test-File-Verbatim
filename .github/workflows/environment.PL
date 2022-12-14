@@ -19,9 +19,16 @@ my $is_unix = $is_windows ? '' : 1;
 
 print $fh <<"EOD";
 MY_HOME=$home
+MY_IS_GITHUB_ACTION=1
 MY_IS_UNIX=$is_unix
 MY_IS_WINDOWS=$is_windows
 MY_PERL_IS_5_10=$is_5_10
+EOD
+
+# Keep Term::ReadKey happy under Windows.
+$is_windows and print $fh <<"EOD";
+LINES=24
+COLUMNS=80
 EOD
 
 __END__
@@ -44,6 +51,10 @@ environment. The following environment variables are added:
 The job's home directory, as determined by
 L<File::HomeDir|File::HomeDir>.
 
+=head2 MY_IS_GITHUB_ACTION
+
+Always true (i.e. C<'1'>).
+
 =head2 MY_IS_UNIX
 
 True (i.e. C<1>) if running under some flavor of Unix, and false (i.e.
@@ -56,6 +67,10 @@ True (i.e. C<1>) if running under Windows, and false (i.e. C<''>)
 othewise. At the moment this is true if C<$^O> is C<'MSWin32'> or
 C<'dos'>.
 
+=head2 MY_PERL_IS_5_10
+
+True (i.e. C<1>) if running under at least Perl 5.10.0, and false
+(i.e. C<''>) otherwise.
 =head1 AUTHOR
 
 Thomas R. Wyant, III F<wyant at cpan dot org>

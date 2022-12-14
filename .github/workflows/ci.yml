@@ -88,9 +88,18 @@ jobs:
     - name: Display local envoronment variables
       run: |
         echo MY_HOME=${{ env.MY_HOME }}
-        echo MY_PERL_IS_5_10=${{ env.MY_PERL_IS_5_10 }}
+        echo MY_IS_GITHUB_ACTION=${{ env.MY_IS_GITHUB_ACTION }}
         echo MY_IS_UNIX=${{ env.MY_IS_UNIX }}
         echo MY_IS_WINDOWS=${{ env.MY_IS_WINDOWS }}
+        echo MY_PERL_IS_5_10=${{ env.MY_PERL_IS_5_10 }}
+
+    # Module::Build dropped the dependency on Pod::Man as of version
+    # 0.4232 because of the problems it caused for Perl 5.8. But Perl
+    # 5.10 ships with 2.16, which is does not pass Module::Build's
+    # t/manifypods_utf8.t. So:
+    - name: Install latest podlators if on more-or-less modern Perl
+    -if: env.MY_PERL_IS_5_10
+    -run: cpanm Pod::Man
 
     - name: Install module dependencies
       run: |
