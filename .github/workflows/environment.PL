@@ -16,6 +16,8 @@ my $is_windows = {
     dos		=> 1,
 }->{$^O} || '';
 my $is_unix = $is_windows ? '' : 1;
+my $want_pod_man = "$]" < 5.010 ? 'RRA/podlators-4.14.tar.gz' :
+    "$]" < 5.012 ? 'Pod::Man' : '';
 
 print $fh <<"EOD";
 MY_HOME=$home
@@ -23,6 +25,7 @@ MY_IS_GITHUB_ACTION=1
 MY_IS_UNIX=$is_unix
 MY_IS_WINDOWS=$is_windows
 MY_PERL_IS_5_10=$is_5_10
+MY_WANT_POD_MAN=$want_pod_man
 EOD
 
 # Keep Term::ReadKey happy under Windows.
@@ -71,6 +74,13 @@ C<'dos'>.
 
 True (i.e. C<1>) if running under at least Perl 5.10.0, and false
 (i.e. C<''>) otherwise.
+
+=head2 MY_WANT_POD_MAN
+
+The specification of the C<podlators> distribution to install.
+Emptu if the version that comes with the running Perl is OK. This
+is needed because Module::Build requires it.
+
 =head1 AUTHOR
 
 Thomas R. Wyant, III F<wyant at cpan dot org>
