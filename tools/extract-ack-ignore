@@ -36,13 +36,12 @@ my %ignore;
 
     while ( <$fh> ) {
 	chomp;
-	my ( $what, $test, $data ) = m/(?|
-	    --ignore-(?|(file)|(dir)ectory)=([^:]+):(.*) |
-	    --ignore-(dir)(=)(.*)
-	)/smx
+
+	my ( $what, $data ) = m/ --ignore-(?|(file)|(dir)(?:ectory)?)=(.*) /smx
 	    or next;
-	$test eq '='
-	    and $test = 'is';
+	my @spec = split /:/, $data, 2;
+	( my $test, $data ) = @spec > 1 ? @spec : ( is => @spec );
+
 	my $code = __PACKAGE__->can( "record_$test" )
 	    or die "Test '$test' not recognized in '$_'\n";
 	$code->( $what => $data );
