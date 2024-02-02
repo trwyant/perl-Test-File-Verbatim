@@ -8,8 +8,6 @@ our @ISA = qw{ Module::Build };
 # use lib 'inc';	# Not needed because this module got loaded
 use My::Module::Meta;
 
-use Carp;
-
 sub ACTION_authortest {
 ##  my ( $self, @args ) = @_;	# Arguments unused
     my ( $self ) = @_;
