@@ -57,7 +57,7 @@ jobs:
     steps:
 
     - name: Check out code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up perl
       # Specify the action performed by this step. In this case it is a
@@ -78,10 +78,14 @@ jobs:
       run: |
         perl -v
 
-    - name: Customize environment
+    - name: Install support modules
+      continue-on-error: true
       run: |
         cpanm -v
         cpanm File::HomeDir Getopt::Long version
+
+    - name: Customize environment
+      run: |
         perl .github/workflows/environment.PL
 
     - name: Display local envoronment variables
@@ -111,8 +115,8 @@ jobs:
     - name: Run ExtUtils::MakeMaker tests
       run: |
         perl Makefile.PL
-        make
-        make test
+        perl .github/workflows/make.PL
+        perl .github/workflows/make.PL test
 
     - name: Run Module::Build tests
       run: |
