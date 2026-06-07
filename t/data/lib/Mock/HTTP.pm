@@ -75,7 +75,6 @@ This class supports the following public methods:
 
 This class has the following attributes:
 
-
 =head1 SEE ALSO
 
 <<< replace or remove boilerplate >>>
@@ -83,8 +82,7 @@ This class has the following attributes:
 =head1 SUPPORT
 
 Support is by the author. Please file bug reports at
-L<https://rt.cpan.org/Public/Dist/Display.html?Name=Test-File-Verbatim>,
-L<https://github.com/trwyant/perl-Test-File-Verbatim/issues/>, or in
+L<https://github.com/trwyant/perl-Test-Verbatim/issues> or in
 electronic mail to the author.
 
 =head1 AUTHOR

@@ -39,8 +39,7 @@ L<Test::File::Verbatim|Test::File::Verbatim>
 =head1 SUPPORT
 
 Support is by the author. Please file bug reports at
-L<https://rt.cpan.org/Public/Dist/Display.html?Name=Limerick>,
-L<https://github.com/trwyant/perl-Limerick/issues/>, or in
+L<https://github.com/trwyant/perl-Test-Verbatim/issues> or in
 electronic mail to the author.
 
 =head1 AUTHOR

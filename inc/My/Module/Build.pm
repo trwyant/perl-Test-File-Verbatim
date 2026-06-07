@@ -186,8 +186,7 @@ L<Module::Build|Module::Build> version C<0.26>.
 =head1 SUPPORT
 
 Support is by the author. Please file bug reports at
-L<https://rt.cpan.org/Public/Dist/Display.html?Name=Test-File-Verbatim>,
-L<https://github.com/trwyant/perl-Test-File-Verbatim/issues/>, or in
+L<https://github.com/trwyant/perl-Test-Verbatim/issues> or in
 electronic mail to the author.
 
 =head1 AUTHOR
