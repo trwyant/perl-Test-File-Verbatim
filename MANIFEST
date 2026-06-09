@@ -15,6 +15,7 @@ MANIFEST
 META.json
 META.yml
 README
+SECURITY
 t/basic.t
 t/data/lib/Limerick/Nantucket.pm
 t/data/lib/Limerick/Nantucket.pod
