@@ -1,3 +1,6 @@
+0.000_010	2026-11-23	T. R. Wyant
+    Add explicit release_status to Makefile.PL.
+
 0.000_009	2026-10-04	T. R. Wyant
     Correct Makefile.PL EUMM version accommodations.
 
